@@ -1,0 +1,48 @@
+# 🐍 Python cache and compiled files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# 📦 Virtual environment
+.venv/
+env/
+venv/
+
+# 🧪 Test and coverage artifacts
+htmlcov/
+.coverage
+.cache/
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+
+# 📊 Jupyter notebooks (if used)
+.ipynb_checkpoints/
+
+# 📁 Data files
+*.csv
+*.json
+*.xlsx
+*.db
+
+# 🛠 IDE/editor configs
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# 📦 Package management
+*.egg-info/
+dist/
+build/
+
+# 🔒 Secrets or environment configs
+.env
+.env.*
+
+# 📄 OS-specific
+.DS_Store
+Thumbs.db

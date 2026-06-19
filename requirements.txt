@@ -1,0 +1,14 @@
+pandas
+numpy
+matplotlib
+plotly
+pytest
+scikit-learn
+ta
+importlib-metadata
+black
+isort
+flake8
+fastapi
+MetaTrader5
+uvicorn

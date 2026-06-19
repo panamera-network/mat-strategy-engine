@@ -1,0 +1,35 @@
+{
+  "stage": "Seed",
+  "action": "Watch",
+  "reasons": [
+    "Waiting for M1 seed"
+  ],
+  "alignment": "M1:neutral M5:neutral M15:neutral",
+  "cascade_score": 0.2,
+  "thresholds": {
+    "t_strength_seed": 1.5,
+    "t_strength_rising_delta": 0.2,
+    "t_momentum_min": 0.3,
+    "t_bias_abs_min": 0.5,
+    "swing_support_strength": 1.2
+  },
+  "checks": {
+    "bias_m1_up": false,
+    "bias_m5_up": false,
+    "bias_m15_neutral_or_up": true,
+    "m5_flip_up_on_close": false,
+    "m1_strength_ok": false,
+    "m5_strength_rising": false,
+    "momentum_ok": false,
+    "structure_ok": true,
+    "shift_ok": false,
+    "demand_supports": false,
+    "suppression": false
+  },
+  "timing": {
+    "m5_last_flip_bars": null
+  },
+  "risk": "Medium",
+  "summary": "Scalping setup forming \u2014 waiting for bias and strength",
+  "version": "scalp_cascade_v1"
+}
