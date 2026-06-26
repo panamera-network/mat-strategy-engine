@@ -1,9 +1,14 @@
 
-from asyncio.log import logger
+import logging
 from typing import Dict, List
 from core.CandleEngine import CandleEngine
 from core.StrengthEngine import StrengthEngine
+from core.structure_utils import detect_structure_event, find_swings
 from core.core_models import BiasSnapshot, CandleSnapshot, StrengthDiagnostic
+
+logger = logging.getLogger(__name__)
+
+STRUCTURE_BIAS_SCORE = {"BOS": 8.0, "CHOCH": 10.0}  # CHoCH = trend flip, stronger signal
 
 
 class BiasEngine:
@@ -35,6 +40,18 @@ class BiasEngine:
         if not candles:
             return "neutral", 0.0
 
+        # Structure-driven bias first: BOS/CHoCH overrides the candle-ratio fallback.
+        swing_highs, swing_lows = find_swings(candles)
+        structure_event = detect_structure_event(candles, swing_highs, swing_lows)
+
+        if structure_event["valid"] and structure_event["type"] in STRUCTURE_BIAS_SCORE:
+            direction = structure_event["direction"]
+            score = STRUCTURE_BIAS_SCORE[structure_event["type"]]
+            bias_score = score if direction == "Bullish" else -score
+            bias_label = "uptrend" if direction == "Bullish" else "downtrend"
+            return bias_label, bias_score
+
+        # Fallback: no confirmed BOS/CHoCH — use the existing candle-ratio logic.
         up_closes = sum(1 for c in candles if c.close > c.open)
         down_closes = sum(1 for c in candles if c.close < c.open)
 
@@ -44,7 +61,7 @@ class BiasEngine:
         if bias_score > 1.5:
             bias_label = "uptrend"
         elif bias_score < -1.5:
-         bias_label = "downtrend"
+            bias_label = "downtrend"
         else:
             bias_label = "neutral"
 

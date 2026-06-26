@@ -26,6 +26,7 @@ core/                  → LIVE engine logic (active, in development)
   BiasEngine.py, CandleEngine.py, MomentumEngine.py, ShiftEngine.py,
   StrengthEngine.py, StructureEngine.py, StyleEngine.py,
   SuppressionEngine.py, TrendEngine.py, demand_engine.py,
+  OrderBlockEngine.py, FVGEngine.py, structure_utils.py,
   core_models.py, strategy_snapshot.py, SnapshotCache.py
   strategy/             → StrategyEngine.py + individual strategy modules
   Output/                → output assembly layer (current focus, see below)
@@ -93,6 +94,65 @@ Known remaining gap (deprioritized, not fixed): `XBRUSD_i` (Brent) fails with
 returns `None` when there are under 3 candle snapshots for a symbol/TF, and
 nothing downstream guards against that `None`. Symbol-specific data
 availability issue, not a logic bug. Confirmed not worth fixing right now.
+
+## Swing-based SMC engine (2026-06-27)
+
+`core/StructureEngine.py` was rewritten from single-candle HH/HL/LH/LL
+comparison to proper swing-based BOS/CHoCH detection:
+
+- **`core/structure_utils.py`** (new) — pure swing/structure functions with
+  no dependency on other engines: `find_swings()` (20-candle lookback,
+  3-candle-each-side confirmation), `detect_trend()`, `detect_structure_event()`
+  (BOS = break with the trend, CHoCH = break against it — trend flip),
+  `derive_snr_levels()` (HH → Resistance, LL → Support, CHoCH flips the
+  nearest level's role), `detect_snd()`. Split out from `StructureEngine.py`
+  specifically to avoid a circular import — `StructureEngine` pulls in
+  `SuppressionEngine`, which pulls in `BiasEngine`, which now also needs the
+  swing functions.
+- **`core/BiasEngine.py`** — `evaluate_bias()` now checks for a confirmed
+  BOS/CHoCH first (score ±8/±10, stronger signal for CHoCH since it's a
+  trend flip) and only falls back to the old up-close/down-close ratio when
+  there's no confirmed structure event.
+- **`core/demand_engine.py`** rewritten — supply/demand zones are now ATR(14)
+  based (`compute_atr()`, `detect_zones()`) instead of a fixed body-ratio
+  comparison; a zone is `mitigated` once price closes back inside it.
+  `DemandEngine.get_label()` (the live interface used by `StyleEngine.py`)
+  is preserved; the previously-dead module-level `demand_engine` instance and
+  `fetch_demand_label`/`get_demand` wrapper functions (confirmed unused
+  anywhere in the repo) were dropped in the rewrite.
+- **`core/OrderBlockEngine.py`** (new) — `detect_order_blocks()`: bullish OB
+  = last bearish candle before a BOS Bullish, bearish OB = last bullish
+  candle before a BOS Bearish; mitigated once price closes back inside it.
+- **`core/FVGEngine.py`** (new) — `detect_fvg()`: 3-candle fair value gap
+  detection, returns unmitigated gaps only.
+- **`core/core_models.py`** — added `SNRLevel`, `OrderBlock`, `FVG`
+  dataclasses; `StructureSnapshot` gained `snr_levels`, `order_blocks`, `fvg`
+  fields.
+- **`core/Output/Output.py`** — `_build_structure_context()` fetches one
+  `StructureSnapshot` per timeframe (shared by strategy evaluation, SNR,
+  order blocks, and FVGs — no duplicate fetches across those four). Added
+  `snr_levels`, `order_blocks`, `fvg`, `supply_demand_zones` to every
+  symbol's output block, all keyed by timeframe.
+
+**Real bug fixed along the way**: `StructureEngine.get_snapshot()` called
+`self.candle_engine.get_snapshots(self, symbol=symbol, ...)` — an extra,
+wrong `self` positional argument. This *should* have crashed every call with
+`TypeError: got multiple values for argument 'symbol'` (confirmed by testing
+it directly) — but it silently "worked" because `api/core_router.py:30` was
+separately instantiating `StructureEngine(CandleEngine)` with the **class**
+instead of an instance, so `self.candle_engine` was the class itself; calling
+its unbound method with the wrong `self` happened to not collide because
+`get_snapshots()`'s body never reads `self`. Two independent bugs were
+canceling each other out. Fixed both: removed the extra `self` arg, and
+`core_router.py` now passes the actual `candle_engine` instance.
+
+**Perf note**: `/core/output` now does noticeably more work per symbol
+(structure fetch per timeframe for SNR/OB/FVG, plus a separate demand-zone
+fetch per timeframe) — a full 36-symbol response measured ~56s live. This is
+on top of the already-flagged unmeasured perf risk from wiring strategies in.
+Worth profiling and likely caching/batching candle fetches per symbol instead
+of re-fetching per feature, before this matters for a real dashboard refresh
+rate.
 
 ## Other Folders — Status Check (reviewed 2026-06-21)
 

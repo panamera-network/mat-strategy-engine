@@ -123,6 +123,37 @@ class StrategyMode(str, Enum):
     RANGE = "range"
     BREAKOUT = "breakout"
 
+
+@dataclass
+class SNRLevel:
+    type: str            # "Resistance" or "Support"
+    level: float
+    source: str          # "HH", "LL", "CHOCH_flip"
+    valid: bool = True
+
+
+@dataclass
+class OrderBlock:
+    type: str            # "Bullish" or "Bearish"
+    high: float
+    low: float
+    open: float
+    close: float
+    timeframe: str
+    valid: bool = True
+    mitigated: bool = False
+
+
+@dataclass
+class FVG:
+    type: str            # "Bullish" or "Bearish"
+    top: float
+    bottom: float
+    timeframe: str
+    valid: bool = True
+    mitigated: bool = False
+
+
 @dataclass
 class StructureSnapshot:
     symbol: str
@@ -148,9 +179,9 @@ class StructureSnapshot:
     suppression: bool = False
     suppression_reason: str = ""
     bias: str = "Neutral"
-
-
-
+    snr_levels: List[SNRLevel] = field(default_factory=list)
+    order_blocks: List[OrderBlock] = field(default_factory=list)
+    fvg: List[FVG] = field(default_factory=list)
 
     def __post_init__(self):
         self.structure_type = self.detect_structure_label()

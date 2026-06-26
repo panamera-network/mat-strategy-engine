@@ -1,4 +1,5 @@
 import logging
+from dataclasses import asdict
 from datetime import datetime, timezone
 from collections import OrderedDict
 
@@ -112,26 +113,48 @@ def _compute_signal_confidence(bias_ordered: dict, scalping_snapshots: dict, sca
     return bias_conf, momentum_conf, align_conf
 
 
-def _build_strategy_signals(symbol: str, structure_engine) -> list:
-    """Run every loaded strategy plugin across all timeframes for this symbol.
-
-    Builds its own StrategySnapshot context straight from structure_engine —
-    independent of the scalping/swing display snapshots above, since those
-    have already been transformed (renamed/normalized fields) for display
-    and no longer carry the raw structure data strategies need.
-    """
-    context = {}
+def _build_structure_context(symbol: str, structure_engine) -> dict:
+    """Fetch one raw StructureSnapshot per timeframe — single source for
+    strategy evaluation, SNR levels, order blocks, and FVGs below, so we
+    don't re-fetch structure data per feature."""
+    structure_map = {}
     for tf in BIAS_ORDER:
         structure = structure_engine.get_snapshot(symbol, tf)
         if structure:
-            context[f"{symbol}_{tf}"] = to_strategy_snapshot(structure)
+            structure_map[tf] = structure
+    return structure_map
+
+
+def _build_strategy_signals(symbol: str, structure_map: dict) -> list:
+    """Run every loaded strategy plugin across all timeframes for this symbol."""
+    context = {
+        f"{symbol}_{tf}": to_strategy_snapshot(structure)
+        for tf, structure in structure_map.items()
+    }
 
     signals = []
-    for tf in BIAS_ORDER:
+    for tf in structure_map:
         snap = context.get(f"{symbol}_{tf}")
         if snap:
             signals.extend(strategy_engine.evaluate(snap, context))
     return signals
+
+
+def _build_structure_extras(structure_map: dict) -> tuple:
+    """Per-timeframe SNR levels, order blocks, and FVGs as plain dicts."""
+    snr_levels = {tf: [asdict(lvl) for lvl in s.snr_levels] for tf, s in structure_map.items() if s.snr_levels}
+    order_blocks = {tf: [asdict(ob) for ob in s.order_blocks] for tf, s in structure_map.items() if s.order_blocks}
+    fvg = {tf: [asdict(f) for f in s.fvg] for tf, s in structure_map.items() if s.fvg}
+    return snr_levels, order_blocks, fvg
+
+
+def _build_supply_demand_zones(symbol: str, demand_engine) -> dict:
+    zones = {}
+    for tf in BIAS_ORDER:
+        tf_zones = [asdict(z) for z in demand_engine.get_zones(symbol, tf) if z.valid]
+        if tf_zones:
+            zones[tf] = tf_zones
+    return zones
 
 
 def _build_symbol_snapshot(
@@ -198,7 +221,14 @@ def _build_symbol_snapshot(
     display_block = add_display_percentages(clean_block, symbol)
     display_block["health"] = build_symbol_health(symbol, display_block)
     display_block["signal_health"] = signal_health
-    display_block["strategy_signals"] = _build_strategy_signals(symbol, structure_engine)
+
+    structure_map = _build_structure_context(symbol, structure_engine)
+    snr_levels, order_blocks, fvg = _build_structure_extras(structure_map)
+    display_block["strategy_signals"] = _build_strategy_signals(symbol, structure_map)
+    display_block["snr_levels"] = snr_levels
+    display_block["order_blocks"] = order_blocks
+    display_block["fvg"] = fvg
+    display_block["supply_demand_zones"] = _build_supply_demand_zones(symbol, demand_engine)
 
     # Cache for next pass (deltas, history, etc.)
     snapshot_cache.set(symbol, {

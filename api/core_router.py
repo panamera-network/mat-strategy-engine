@@ -27,7 +27,7 @@ strength_engine = StrengthEngine()
 bias_engine = BiasEngine(candle_engine, strength_engine)
 momentum_engine = MomentumEngine(candle_engine)
 demand_engine = DemandEngine(candle_engine)
-structure_engine = StructureEngine(CandleEngine)
+structure_engine = StructureEngine(candle_engine)
 shift_engine = ShiftEngine(candle_engine)
 
 @router.get("/symbols")
