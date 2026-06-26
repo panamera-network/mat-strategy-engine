@@ -1,18 +1,12 @@
+import logging
 from dataclasses import asdict
-from core.BiasEngine import BiasEngine
-from core.CandleEngine import CandleEngine
 from core.Output.helper import get_previous_state
-from core.StrengthEngine import StrengthEngine
 
-print("🚨 build_scalping_diagnostic() CALLED 🚨")
-
-candle_engine = CandleEngine()
-strength_engine = StrengthEngine()
-bias_engine = BiasEngine(candle_engine, strength_engine)
+logger = logging.getLogger(__name__)
 
 
 def build_scalping_diagnostic(symbol, scalping_map, bias_map, cfg):
-    print(f"Running scalping diagnostic for {symbol}")
+    logger.debug("Running scalping diagnostic for %s", symbol)
 
     # --- Helper functions ---
     def up(label_or_score):
@@ -62,14 +56,15 @@ def build_scalping_diagnostic(symbol, scalping_map, bias_map, cfg):
         "bias_m5_up": up(b5_label),
         "bias_m15_neutral_or_up": neutral_or_up(b15_label),
         "m5_flip_up_on_close": flipped_up(
-            prev["bias"]["M5"]["label"] if prev else None,
+            prev["bias"]["M5"]["bias_label"] if prev else None,
             b5_label
         ),
         "m1_strength_ok": s1 is not None and s1 >= cfg.t_strength_seed,
         "m5_strength_rising": (
             s5 is not None and rising(
                 s5,
-                prev["bias"]["M5"]["strength"] if prev else None,
+                prev["bias"]["M5"]["strength_diagnostic"].strength
+                if prev and prev["bias"]["M5"].get("strength_diagnostic") else None,
                 cfg.t_strength_rising_delta
             )
         ),
@@ -146,7 +141,7 @@ def build_scalping_diagnostic(symbol, scalping_map, bias_map, cfg):
         stage = "Seed"
         action = "Watch"
         reasons.append("Fallback: no matching condition")
-        print(f"✅ Summary built: {summary}")
+        logger.debug("Summary built: %s", summary)
 
                 
     # Cascade score (0..1) — simple blend; tune as needed
@@ -184,7 +179,7 @@ def build_scalping_diagnostic(symbol, scalping_map, bias_map, cfg):
         "thresholds": thresholds,
         "checks": checks,
         "timing": {
-            "m5_last_flip_bars": None #bars_since(prev, "M5_flip") if prev else None
+            "m5_last_flip_bars": None
         },
         "risk": "High" if checks["suppression"] else ("Low" if cascade_score >= 0.7 else "Medium"),
         "summary": summary,

@@ -30,3 +30,8 @@ class SnapshotCache:
             else:
                 self._store.clear()
                 self._timestamps.clear()
+
+
+# Shared singleton — import this instead of instantiating SnapshotCache() directly,
+# otherwise callers end up with disconnected in-memory stores.
+snapshot_cache = SnapshotCache()

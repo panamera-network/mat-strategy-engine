@@ -13,12 +13,7 @@ test:
 
 # 🧼 Lint the codebase
 lint:
-    . .venv/bin/activate && flake8 engine/ plugins/
-
-# 🧠 Run a specific strategy plugin
-# Usage: make strategy plugin=strength.strategy_calc file=data/sample_ohlc.json
-strategy:
-    . .venv/bin/activate && python -c "from plugins.$(plugin) import run_strategy; run_strategy('$(file)')"
+    . .venv/bin/activate && flake8 core/ api/ mt5/
 
 # 🧹 Clean up cache and compiled files
 clean:

@@ -1,10 +1,14 @@
 from typing import Dict, List
 import MetaTrader5 as mt5
 
+from .init import ensure_mt5_ready
+
 
 def check_connection() -> Dict:
-    if not mt5.initialize():
-        return {"status": "error", "message": f"MT5 initialization failed: {mt5.last_error()}"}
+    try:
+        ensure_mt5_ready()
+    except RuntimeError as e:
+        return {"status": "error", "message": str(e)}
     return {"status": "ok", "message": "MT5 initialized and ready"}
 
 

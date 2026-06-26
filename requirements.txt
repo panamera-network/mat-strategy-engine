@@ -10,5 +10,8 @@ black
 isort
 flake8
 fastapi
+fastapi-cache2
 MetaTrader5
 uvicorn
+psutil
+GPUtil

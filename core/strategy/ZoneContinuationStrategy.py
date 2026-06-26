@@ -1,5 +1,5 @@
 from typing import Dict, Optional
-from core.strategy.strategy_models import Strategy, StrategySnapshot
+from core.strategy.strategy_models import Strategy, StrategySnapshot, price_from_snapshot
 
 
 class ZoneContinuationStrategy(Strategy):
@@ -25,7 +25,8 @@ class ZoneContinuationStrategy(Strategy):
         # Confirm structure shift on lower timeframe
         if snapshot.structure_type in ["breakout", "reversal"] and snapshot.structure_valid and not snapshot.suppression:
             direction = "long" if snapshot.structure_direction == "Bullish" else "short"
-            zone_source = h1.context_zone if h1.context_zone in ["demand", "supply"] else h4.context_zone
+            zone_snap = h1 if h1.context_zone in ["demand", "supply"] else h4
+            zone_source = zone_snap.context_zone
             return {
                 "symbol": symbol,
                 "timeframe": snapshot.timeframe,
@@ -33,7 +34,8 @@ class ZoneContinuationStrategy(Strategy):
                 "reason": f"Zone continuation from {zone_source}",
                 "confidence": snapshot.momentum,
                 "trigger": snapshot.structure_type,
-                "timestamp": snapshot.timestamp
+                "timestamp": snapshot.timestamp,
+                "price": price_from_snapshot(zone_snap)
             }
 
         return None

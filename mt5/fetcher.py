@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import List
 import MetaTrader5 as mt5
 from pydantic import BaseModel
-from .init import initialize_mt5
+from .init import ensure_mt5_ready
 from .symbol_resolver import resolve_symbol
 from .timeframes import resolve_timeframe
 
@@ -15,7 +15,9 @@ class Candle(BaseModel):
     volume: float
 
 def fetch_candles(symbol: str, timeframe: str, count: int = 100) -> List[Candle]:
-    if not initialize_mt5():
+    try:
+        ensure_mt5_ready()
+    except RuntimeError:
         return []
 
     resolved = resolve_symbol(symbol)

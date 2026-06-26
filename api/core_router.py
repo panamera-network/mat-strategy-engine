@@ -1,5 +1,6 @@
 import asyncio
-from fastapi import APIRouter, Request, WebSocket
+from fastapi import APIRouter, HTTPException, Request, WebSocket
+from pydantic import BaseModel
 from typing import List
 
 from core.BiasEngine import BiasEngine
@@ -14,7 +15,7 @@ from core.StructureEngine import StructureEngine
 from core.StyleEngine import build_multi_symbol_snapshot
 from core.core_models import BiasShiftEvent, StructureSnapshot
 from core.demand_engine import DemandEngine
-from core.strategy.StrategyEngine import StrategyEngine
+from core.strategy.StrategyEngine import strategy_engine
 from core.strategy.strategy_models import StrategySnapshot
 from mt5.constants import SYMBOLS
 
@@ -27,7 +28,6 @@ bias_engine = BiasEngine(candle_engine, strength_engine)
 momentum_engine = MomentumEngine(candle_engine)
 demand_engine = DemandEngine(candle_engine)
 structure_engine = StructureEngine(CandleEngine)
-strategy_engine = StrategyEngine ()    
 shift_engine = ShiftEngine(candle_engine)
 
 @router.get("/symbols")
@@ -167,6 +167,22 @@ async def output_stream(websocket: WebSocket):
             await asyncio.sleep(60)  # adjust frequency
     except Exception as e:
         print("WebSocket closed:", e)
+
+
+class StrategyToggleRequest(BaseModel):
+    enabled: bool
+
+
+@router.get("/strategies")
+def list_strategies():
+    return {"strategies": strategy_engine.list_strategies()}
+
+
+@router.patch("/strategies/{name}")
+def toggle_strategy(name: str, body: StrategyToggleRequest):
+    if not strategy_engine.set_enabled(name, body.enabled):
+        raise HTTPException(status_code=404, detail=f"No strategy named '{name}' is loaded")
+    return {"name": name, "enabled": body.enabled}
 
 
 @router.post("/evaluate")

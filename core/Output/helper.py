@@ -1,31 +1,10 @@
 import logging
 from typing import Any, Dict, Optional
-from core.Output.diagnostic_models import ScalpCfg
-from core.SnapshotCache import SnapshotCache
-
-snapshot_cache = SnapshotCache()
-
-# Diagnostic config
-cfg = ScalpCfg(
-    t_strength_seed=1.5,
-    t_strength_rising_delta=0.2,
-    t_momentum_min=0.3,
-    t_bias_abs_min=0.5,
-    swing_support_strength=1.2
-)
-
-# Timeframe orders
-BIAS_ORDER = ["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1"]
-SCALPING_ORDER = ["M1", "M5", "M15", "M30"]
-SWING_ORDER = ["H1", "H4", "D1", "W1", "MN1"]
+from core.Output.diagnostic_models import cfg, BIAS_ORDER, SCALPING_ORDER, SWING_ORDER
+from core.SnapshotCache import snapshot_cache
 
 def get_previous_state(symbol: str) -> Optional[Dict[str, Any]]:
     return snapshot_cache.get(symbol)
-
-def bars_since(prev: Dict[str, Any], key: str) -> Optional[int]:
-    last_flip_bar = prev.get("flip_bars", {}).get(key)
-    current_bar = get_current_bar_index()  # however you track it
-    return current_bar - last_flip_bar if last_flip_bar is not None else None
 
 def strip_nulls(obj):
     if isinstance(obj, dict):

@@ -10,6 +10,21 @@ class ScalpCfg:
     t_bias_abs_min: float = 0.5             # Ignore tiny bias
     swing_support_strength: float = 1.2     # H1 strength to call "supports long"
 
+
+# Shared diagnostic config + timeframe orders — single source of truth,
+# imported by Output.py and helper.py so they can't drift apart.
+cfg = ScalpCfg(
+    t_strength_seed=1.5,
+    t_strength_rising_delta=0.2,
+    t_momentum_min=0.3,
+    t_bias_abs_min=0.5,
+    swing_support_strength=1.2,
+)
+
+SCALPING_ORDER = ["M1", "M5", "M15", "M30"]
+SWING_ORDER = ["H1", "H4", "D1", "W1", "MN1"]
+BIAS_ORDER = SCALPING_ORDER + SWING_ORDER
+
 # ---------- Helpers for hybrid dict/object access ----------
 def get(item: Any, key: str, default=None):
     if isinstance(item, dict):

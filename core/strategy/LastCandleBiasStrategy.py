@@ -1,11 +1,11 @@
 from typing import Dict, Optional
-from core.strategy.strategy_models import Strategy, StrategySnapshot
+from core.strategy.strategy_models import Strategy, StrategySnapshot, price_from_snapshot
 
 
 class LastCandleBiasStrategy(Strategy):
     def react(self, event: StrategySnapshot, context: Dict[str, StrategySnapshot]) -> Optional[Dict]:
         # Only act on anchor timeframes
-        anchor_tfs = ["D1", "H4", "W1", "M"]
+        anchor_tfs = ["D1", "H4", "W1", "MN1"]
         if event.timeframe not in anchor_tfs:
             return None
 
@@ -21,7 +21,7 @@ class LastCandleBiasStrategy(Strategy):
 
         # Get shift candle timeframe
         shift_tf_map = {
-            "M": "D1",
+            "MN1": "D1",
             "W1": "H4",
             "D1": "H1",
             "H4": "M30"
@@ -44,7 +44,9 @@ class LastCandleBiasStrategy(Strategy):
                 "direction": "long" if last_direction == "Bullish" else "short",
                 "reason": f"Last candle bias confirmed by {shift_tf} shift candle",
                 "confidence": shift_snapshot.momentum,
-                "trigger": shift_snapshot.structure_type
+                "trigger": shift_snapshot.structure_type,
+                "timestamp": event.timestamp,
+                "price": price_from_snapshot(shift_snapshot)
             }
 
         return None

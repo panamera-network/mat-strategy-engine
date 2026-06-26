@@ -4,6 +4,10 @@ from typing import Any, Dict, Optional
 from core.Output.diagnostic_models import ScalpCfg, flipped_up, get, label_neutral_or_up, label_up, normalize_struct_label
 
 
+def _bias_strength(bias_entry: Dict[str, Any]) -> float:
+    diag = get(bias_entry, "strength_diagnostic", None)
+    return diag.strength if diag else 0.0
+
 
 def enrich_swing_with_diagnostic(
     symbol: str,
@@ -16,13 +20,13 @@ def enrich_swing_with_diagnostic(
 
     # Pull bias + strength
     b_h1, b_h4, b_d1 = bias_map.get("H1", {}), bias_map.get("H4", {}), bias_map.get("D1", {})
-    s_h1, s_h4, s_d1 = get(b_h1, "strength", 0.0), get(b_h4, "strength", 0.0), get(b_d1, "strength", 0.0)
+    s_h1, s_h4, s_d1 = _bias_strength(b_h1), _bias_strength(b_h4), _bias_strength(b_d1)
 
     # Previous labels
-    pb_h4 = get(prev_bias_map.get("H4", {}), "label", None) if prev_bias_map else None
+    pb_h4 = get(prev_bias_map.get("H4", {}), "bias_label", None) if prev_bias_map else None
 
     # Labels
-    l_h1, l_h4, l_d1 = get(b_h1, "label", "neutral"), get(b_h4, "label", "neutral"), get(b_d1, "label", "neutral")
+    l_h1, l_h4, l_d1 = get(b_h1, "bias_label", "neutral"), get(b_h4, "bias_label", "neutral"), get(b_d1, "bias_label", "neutral")
 
     # Snapshots
     h1_snap = swing_map.get("H1", {}) or {}
@@ -47,7 +51,7 @@ def enrich_swing_with_diagnostic(
         "bias_d1_neutral_or_up": label_neutral_or_up(l_d1),
         "h4_flip_up": flipped_up(pb_h4, l_h4),
         "h1_strength_ok": s_h1 >= cfg.t_strength_seed,
-        "h4_strength_rising": (s_h4 - (get(prev_bias_map.get("H4", {}), "strength", s_h4) if prev_bias_map else s_h4)) >= cfg.t_strength_rising_delta,
+        "h4_strength_rising": (s_h4 - (_bias_strength(prev_bias_map.get("H4", {})) if prev_bias_map else s_h4)) >= cfg.t_strength_rising_delta,
         "momentum_ok": m_h1 >= cfg.t_momentum_min and m_h4 >= cfg.t_momentum_min,
         "structure_ok": st_h4 in {"BOS", "CHOCH"} or (st_h4 == "Neutral" and sh_h4),
         "shift_ok": sh_h4,

@@ -7,6 +7,7 @@ from pydantic import BaseModel
 import MetaTrader5 as mt5
 
 from mt5.constants import SYMBOLS
+from mt5.init import ensure_mt5_ready
 from mt5.symbol_resolver import normalize_symbol_case, resolve_symbol, resolve_symbols_batch
 from mt5.mt5_diagnostics import tag_usability
 
@@ -22,11 +23,6 @@ TF_MAP = {
     "H4": mt5.TIMEFRAME_H4,
     "D1": mt5.TIMEFRAME_D1
 }
-
-# ✅ Ensure MT5 is initialized once
-def ensure_mt5_ready():
-    if not mt5.initialize():
-        raise RuntimeError(f"MT5 initialization failed: {mt5.last_error()}")
 
 
 @router.get("/mt5/candle-status")
@@ -194,16 +190,18 @@ def get_history(symbol: str = "XAUUSD_i", timeframe: int = mt5.TIMEFRAME_M1, bar
     return candles
 
 
-if not mt5.initialize():
-    print("❌ MT5 initialize failed")
-else:
-    print("✅ MT5 initialized")
-
 @router.websocket("/ws/ticks")
 async def ws_ticks(ws: WebSocket):
     await ws.accept()
     symbol = ws.query_params.get("symbol") or "XAUUSD"  # fallback
     print(f"[WS] Client connected for {symbol}")
+
+    try:
+        ensure_mt5_ready()
+    except RuntimeError as e:
+        await ws.send_json({"error": str(e)})
+        await ws.close()
+        return
 
     # Ensure symbol is visible
     if not mt5.symbol_select(symbol, True):

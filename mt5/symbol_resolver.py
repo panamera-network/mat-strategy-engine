@@ -1,20 +1,16 @@
 # symbol_resolver.py
 
-from typing import Optional, List, Dict
-from difflib import get_close_matches, SequenceMatcher
+from typing import Optional, List, Dict, Tuple
+from difflib import SequenceMatcher
 import MetaTrader5 as mt5
+
+from .init import ensure_mt5_ready
 
 # ─────────────────────────────────────────────
 # 🧠 Internal Cache
 _symbol_cache: Dict[str, str] = {}
 
-# ─────────────────────────────────────────────
-# 🔧 Initialization
-def ensure_mt5_initialized() -> bool:
-    if not mt5.initialize():
-        print("❌ MT5 initialization failed")
-        return False
-    return True
+DEFAULT_MATCH_CUTOFF = 0.6
 
 # ─────────────────────────────────────────────
 # 🔠 Symbol Normalization
@@ -33,27 +29,39 @@ def normalize_symbol_case(symbol: str | object) -> str:
     return symbol.upper()
 
 # ─────────────────────────────────────────────
+# 🧩 Shared fuzzy-match core — single source of truth for both resolvers
+def _best_match(base_norm: str, normalized_names: List[str]) -> Tuple[Optional[str], float]:
+    best_match = None
+    best_score = 0.0
+    for name in normalized_names:
+        score = SequenceMatcher(None, base_norm, name).ratio()
+        if score > best_score:
+            best_score = score
+            best_match = name
+    return best_match, best_score
+
+# ─────────────────────────────────────────────
 # 🎯 Single Symbol Resolver
-def resolve_symbol(base: str) -> Optional[str]:
-    base = normalize_symbol_case(base)
-    if base in _symbol_cache:
-        return _symbol_cache[base]
+def resolve_symbol(base: str, cutoff: float = DEFAULT_MATCH_CUTOFF) -> Optional[str]:
+    base_norm = normalize_symbol_case(base)
+    if base_norm in _symbol_cache:
+        return _symbol_cache[base_norm]
 
     all_symbols = mt5.symbols_get()
     if not all_symbols:
         return None
 
     normalized_names = [normalize_symbol_case(s.name) for s in all_symbols]
-    matches = get_close_matches(base, normalized_names, n=1, cutoff=0.6)
+    best_match, best_score = _best_match(base_norm, normalized_names)
 
-    if not matches:
+    if best_match is None or best_score < cutoff:
         return None
 
     resolved = next(
-        (s.name for s in all_symbols if normalize_symbol_case(s.name) == matches[0]),
+        (s.name for s in all_symbols if normalize_symbol_case(s.name) == best_match),
         None
     )
-    _symbol_cache[base] = resolved
+    _symbol_cache[base_norm] = resolved
     return resolved
 
 # ─────────────────────────────────────────────
@@ -63,12 +71,14 @@ def resolve_symbols_batch(
     verbose: bool = False,
     strict: bool = False
 ) -> Dict[str, Dict]:
-    if not ensure_mt5_initialized():
+    try:
+        ensure_mt5_ready()
+    except RuntimeError as e:
         return {
             "symbol_map": {},
             "unresolved": clean_list,
             "confidence": {},
-            "error": "MT5 initialization failed"
+            "error": str(e)
         }
 
     all_symbols = mt5.symbols_get()
@@ -85,19 +95,14 @@ def resolve_symbols_batch(
     confidence: Dict[str, float] = {}
     unresolved: List[str] = []
 
+    cutoff = 0.85 if strict else DEFAULT_MATCH_CUTOFF
+
     for base in clean_list:
         base_norm = normalize_symbol_case(base)
-        best_match = None
-        best_score = 0.0
-
-        for name in normalized_names:
-            score = SequenceMatcher(None, base_norm, name).ratio()
-            if score > best_score:
-                best_score = score
-                best_match = name
+        best_match, best_score = _best_match(base_norm, normalized_names)
 
         resolved = None
-        if not strict or best_score >= 0.85:
+        if best_match is not None and best_score >= cutoff:
             resolved = next(
                 (s.name for s in all_symbols if normalize_symbol_case(s.name) == best_match),
                 None

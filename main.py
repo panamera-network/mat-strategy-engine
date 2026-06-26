@@ -1,3 +1,10 @@
+import sys
+
+# Windows console defaults to cp1252, which can't encode the unicode
+# arrows/emoji used in print()/logging calls throughout core/ and mt5/.
+sys.stdout.reconfigure(encoding="utf-8")
+sys.stderr.reconfigure(encoding="utf-8")
+
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from fastapi_cache import FastAPICache
@@ -9,7 +16,6 @@ from routes.system_status import router as status_router
 from routes.mt5_status import router as mt5_router
 
 from api.core_router import router as core_router
-# from api.notifications_router import router as notifications_router
 
 
 # 🔁 Define lifespan first
@@ -45,5 +51,3 @@ app.include_router(status_router, prefix="/api")
 app.include_router(mt5_router, prefix="/api")
 
 app.include_router(core_router, prefix="/core")
-
-# app.include_router(notifications_router, prefix="/notifications")

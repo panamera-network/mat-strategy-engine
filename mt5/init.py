@@ -1,8 +1,13 @@
 import MetaTrader5 as mt5
 
-def initialize_mt5() -> bool:
-    """Initialize MetaTrader 5 connection."""
+
+def ensure_mt5_ready() -> None:
+    """Initialize MT5 and confirm it's actually connected to an account.
+
+    Raises RuntimeError on failure instead of returning a bool — callers that
+    need a non-raising check should catch RuntimeError themselves.
+    """
     if not mt5.initialize():
-        print("❌ MT5 initialization failed:", mt5.last_error())
-        return False
-    return True
+        raise RuntimeError(f"MT5 initialization failed: {mt5.last_error()}")
+    if mt5.account_info() is None:
+        raise RuntimeError("MT5 initialized but not connected to any account")
