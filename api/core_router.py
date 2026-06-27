@@ -1,7 +1,7 @@
 import asyncio
 from fastapi import APIRouter, HTTPException, Request, WebSocket
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 
 from core.BiasEngine import BiasEngine
 from core.candle_cache import CandleCache
@@ -150,6 +150,34 @@ def get_output_snapshots():
         shift_engine=shift_engine,
         structure_engine=structure_engine,
         cache=cache,
+    )
+
+    return result
+
+
+class OutputRequest(BaseModel):
+    symbols: Optional[List[str]] = None
+
+
+@router.post("/output")
+def get_output_snapshots_filtered(body: OutputRequest = OutputRequest()):
+    """Same as GET /output, but only processes the given symbols (much
+    faster for a small selection — see CandleCache). Empty/omitted list
+    falls back to processing every symbol, same as the GET route."""
+    target_symbols = body.symbols if body.symbols else SYMBOLS
+
+    cache = CandleCache(candle_engine)
+    cache.fetch_all(target_symbols, TIMEFRAMES, count=100)
+
+    result = build_multi_symbol_output(
+        bias_engine=bias_engine,
+        candle_engine=candle_engine,
+        momentum_engine=momentum_engine,
+        demand_engine=demand_engine,
+        shift_engine=shift_engine,
+        structure_engine=structure_engine,
+        cache=cache,
+        symbols=target_symbols,
     )
 
     return result

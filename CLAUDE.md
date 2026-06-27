@@ -201,6 +201,28 @@ requests reading from that warm cache instead of triggering a fresh fetch
 per request. Not implemented — bigger architectural change, deferred until
 actually needed.
 
+## Symbol-filtered `/core/output` (2026-06-27)
+
+Added `POST /core/output` (alongside the existing `GET /core/output`, which
+still always processes the full `SYMBOLS` list — unchanged, used by the
+websocket and any caller that wants everything). The POST route accepts an
+optional JSON body `{"symbols": ["XAUUSD_i", "EURUSD_i", ...]}`; if given, only
+those symbols are processed — empty/omitted body falls back to all symbols,
+same as GET.
+
+`build_multi_symbol_output()` gained an optional `symbols` param (defaults to
+the global `SYMBOLS` list when not given) — this is the only core change;
+everything downstream (the `CandleCache` batch-fetch, per-symbol loop) already
+worked off whatever list it's given.
+
+This exists for `mat-engine-dashboard`'s symbol selector — fetching a
+handful of symbols instead of all 36 is dramatically faster, since
+`CandleCache.fetch_all()` only has to round-trip MT5 for the requested
+symbols. **Verified live**: first request after server startup pays a ~30s
+one-time MT5/symbol-resolution cold-start cost (not specific to this
+feature — same cold start happens on any first request); subsequent
+requests for 5 symbols took ~5s, vs ~15s for all 36.
+
 ## Other Folders — Status Check (reviewed 2026-06-21)
 
 ### `/tests` — broken, doesn't run

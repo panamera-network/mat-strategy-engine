@@ -243,9 +243,10 @@ def _build_symbol_snapshot(
     return display_block
 
 
-def build_multi_symbol_output(bias_engine, candle_engine, momentum_engine, demand_engine, structure_engine, shift_engine, cache=None) -> dict:
+def build_multi_symbol_output(bias_engine, candle_engine, momentum_engine, demand_engine, structure_engine, shift_engine, cache=None, symbols=None) -> dict:
+    target_symbols = symbols if symbols else SYMBOLS
     result = {}
-    for symbol in SYMBOLS:
+    for symbol in target_symbols:
         prev_snapshot = snapshot_cache.get(symbol) or {}
         try:
             result[symbol] = _build_symbol_snapshot(
