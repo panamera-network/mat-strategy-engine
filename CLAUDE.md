@@ -146,13 +146,60 @@ its unbound method with the wrong `self` happened to not collide because
 canceling each other out. Fixed both: removed the extra `self` arg, and
 `core_router.py` now passes the actual `candle_engine` instance.
 
-**Perf note**: `/core/output` now does noticeably more work per symbol
-(structure fetch per timeframe for SNR/OB/FVG, plus a separate demand-zone
-fetch per timeframe) — a full 36-symbol response measured ~56s live. This is
-on top of the already-flagged unmeasured perf risk from wiring strategies in.
-Worth profiling and likely caching/batching candle fetches per symbol instead
-of re-fetching per feature, before this matters for a real dashboard refresh
-rate.
+## Candle cache layer (2026-06-27)
+
+The SMC engine work above made `/core/output` measurably slow (~56s for 36
+symbols) because every feature — `BiasEngine`, `StructureEngine`,
+`MomentumEngine`, `ShiftEngine`, `demand_engine` — independently called
+`CandleEngine.get_snapshots()` per (symbol, timeframe), each one a real MT5
+round-trip. Fixed with a request-scoped cache:
+
+- **`core/candle_cache.py`** (new) — `CandleCache`: `fetch_all(symbols,
+  timeframes, count)` batch-fetches every (symbol, tf) combo once;
+  `get(symbol, tf, count)` reads from the store (slicing the trailing
+  `count` candles) and never touches MT5 again for that pair within the
+  same request. Falls back to a direct fetch (and caches it) if asked for a
+  pair that wasn't pre-fetched. Thread-safe (a lock around the store dict).
+- **`core/CandleEngine.py`** — `get_snapshots()` gained an optional `cache`
+  param; if given, reads through the cache instead of calling `fetch_candles()`
+  directly. Backward compatible — omitting `cache` behaves exactly as before.
+- **Threaded `cache` through every engine that fetches candles**:
+  `BiasEngine.get_bias()`/`get_bias_map()`, `StructureEngine.get_snapshot()`/
+  `batch_snapshots()`, `MomentumEngine.get_momentum()`/`get_score()`,
+  `ShiftEngine.detect_shift()`, `demand_engine.get_zones()`/`get_label()`,
+  `StyleEngine.get_style_snapshot()`, and all of `Output.py`'s internal
+  helpers — all the way up to `build_multi_symbol_output(..., cache=...)`.
+- **`api/core_router.py`**: `/core/output` (both the GET route and the
+  websocket loop) builds one `CandleCache`, calls `fetch_all(SYMBOLS,
+  TIMEFRAMES, count=100)` once, then passes it through. Fresh cache per
+  request/loop-iteration — not persistent.
+
+**Result**: ~56s → ~15-16s for a full 36-symbol `/core/output` (verified
+live, repeatedly, on a clean port — the original ~56-64s figures included
+contamination from an unrelated process that's constantly polling
+`localhost:8000` with `/ws`, `/queue`, `/health` requests having nothing to
+do with this app; re-test on a different port to get a clean number if
+profiling again).
+
+**Did not reach the `<5s` target — investigated and explained, not just
+guessed at**: with the cache, `_build_symbol_snapshot()`'s own compute time
+across all 36 symbols is ~0.3s total. The remaining ~15s is irreducible MT5
+round-trip cost for the 324 distinct (symbol, timeframe) pairs (36 × 9), at
+roughly 45ms/call — this is now a *single* round-trip per pair per request
+(down from many before caching), not redundant calls. Two follow-up attempts
+to push further both made things worse or did nothing:
+- Parallelizing the batch fetch with a thread pool made it ~3.5x *slower*
+  (55s) — the MT5 Python API does not handle concurrent calls well, likely
+  serializing internally.
+- Reducing the fetched candle `count` (100 → 50 → 30) barely moved the
+  total — the per-call cost is dominated by fixed IPC/symbol-switch
+  overhead, not by how much data is requested.
+
+Getting under 5s would need a different architecture: a background job
+refreshing a longer-lived cache every N seconds, with `/core/output`
+requests reading from that warm cache instead of triggering a fresh fetch
+per request. Not implemented — bigger architectural change, deferred until
+actually needed.
 
 ## Other Folders — Status Check (reviewed 2026-06-21)
 

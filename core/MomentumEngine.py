@@ -47,12 +47,12 @@ class MomentumEngine:
             score=raw_score
         )
 
-    def get_momentum(self, symbol: str, timeframe: str) -> MomentumSnapshot:
-        candles = self.candle_engine.get_snapshots(symbol, timeframe, count=6)
+    def get_momentum(self, symbol: str, timeframe: str, cache=None) -> MomentumSnapshot:
+        candles = self.candle_engine.get_snapshots(symbol, timeframe, count=6, cache=cache)
         return self.compute(candles, symbol, timeframe)
 
-    def get_score(self, symbol: str, timeframe: str) -> float:
-        candles = self.candle_engine.get_snapshots(symbol, timeframe, count=6)
+    def get_score(self, symbol: str, timeframe: str, cache=None) -> float:
+        candles = self.candle_engine.get_snapshots(symbol, timeframe, count=6, cache=cache)
         if len(candles) < 6:
             return 0.0
 

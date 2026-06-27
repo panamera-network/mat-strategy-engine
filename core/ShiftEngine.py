@@ -23,8 +23,8 @@ class ShiftEngine:
         self.current_shift_direction = {}
         self.last_shift_change = {}
 
-    def detect_shift(self, snapshot: StructureSnapshot, tf: str, conviction: Optional[float] = None) -> dict:
-        candles = self.candle_engine.get_snapshots(symbol=snapshot.symbol, tf=tf, count=1)
+    def detect_shift(self, snapshot: StructureSnapshot, tf: str, conviction: Optional[float] = None, cache=None) -> dict:
+        candles = self.candle_engine.get_snapshots(symbol=snapshot.symbol, tf=tf, count=1, cache=cache)
         if not candles:
             return self._build_result(False, "Neutral", "neutral", None, conviction)
 

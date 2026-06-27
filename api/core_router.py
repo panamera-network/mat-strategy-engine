@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from typing import List
 
 from core.BiasEngine import BiasEngine
+from core.candle_cache import CandleCache
 from core.CandleEngine import CandleEngine
 from core.MomentumEngine import MomentumEngine
 
@@ -17,7 +18,7 @@ from core.core_models import BiasShiftEvent, StructureSnapshot
 from core.demand_engine import DemandEngine
 from core.strategy.StrategyEngine import strategy_engine
 from core.strategy.strategy_models import StrategySnapshot
-from mt5.constants import SYMBOLS
+from mt5.constants import SYMBOLS, TIMEFRAMES
 
 router = APIRouter()
 
@@ -136,16 +137,19 @@ def get_style_snapshots():
 
 @router.get("/output")
 def get_output_snapshots():
-    print(type(candle_engine))                 # <class '...CandleEngine'>
-    print(type(shift_engine.candle_engine))    # <class '...CandleEngine'>
-    # Build snapshot payload
+    # Request-scoped candle cache — one batch fetch per symbol/timeframe,
+    # every engine below reads from it instead of hitting MT5 again.
+    cache = CandleCache(candle_engine)
+    cache.fetch_all(SYMBOLS, TIMEFRAMES, count=100)
+
     result = build_multi_symbol_output(
         bias_engine=bias_engine,
         candle_engine=candle_engine,
         momentum_engine=momentum_engine,
         demand_engine=demand_engine,
         shift_engine=shift_engine,
-        structure_engine=structure_engine
+        structure_engine=structure_engine,
+        cache=cache,
     )
 
     return result
@@ -155,13 +159,17 @@ async def output_stream(websocket: WebSocket):
     await websocket.accept()
     try:
         while True:
+            cache = CandleCache(candle_engine)
+            cache.fetch_all(SYMBOLS, TIMEFRAMES, count=100)
+
             result = build_multi_symbol_output(
                 bias_engine=bias_engine,
                 candle_engine=candle_engine,
                 momentum_engine=momentum_engine,
                 demand_engine=demand_engine,
                 shift_engine=shift_engine,
-                structure_engine=structure_engine
+                structure_engine=structure_engine,
+                cache=cache,
             )
             await websocket.send_json(result)
             await asyncio.sleep(60)  # adjust frequency

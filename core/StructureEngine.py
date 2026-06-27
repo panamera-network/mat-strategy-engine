@@ -31,8 +31,8 @@ class StructureEngine:
     def __init__(self, candle_engine: CandleEngine):
         self.candle_engine = candle_engine
 
-    def get_snapshot(self, symbol: str, tf: str) -> Optional[StructureSnapshot]:
-        candles = self.candle_engine.get_snapshots(symbol, tf, count=FETCH_COUNT)
+    def get_snapshot(self, symbol: str, tf: str, cache=None) -> Optional[StructureSnapshot]:
+        candles = self.candle_engine.get_snapshots(symbol, tf, count=FETCH_COUNT, cache=cache)
         if len(candles) < SWING_WINDOW * 2 + 1:
             return None
 
@@ -97,10 +97,10 @@ class StructureEngine:
 
         return snapshot
 
-    def batch_snapshots(self, symbols: List[str], tf: str) -> List[StructureSnapshot]:
+    def batch_snapshots(self, symbols: List[str], tf: str, cache=None) -> List[StructureSnapshot]:
         results = []
         for symbol in symbols:
-            snapshot = self.get_snapshot(symbol, tf)
+            snapshot = self.get_snapshot(symbol, tf, cache=cache)
             if snapshot and snapshot.structure_valid:
                 results.append(snapshot)
         return results

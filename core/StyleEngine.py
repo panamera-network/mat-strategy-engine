@@ -10,11 +10,11 @@ from datetime import datetime, timezone
 def get_style_snapshot(symbol, tf, mode,
                        bias_engine, momentum_engine,
                        demand_engine, structure_engine, shift_engine,
-                       candle_engine=None) -> StyleSnapshot:
-    structure = structure_engine.get_snapshot(symbol, tf)
-    bias = bias_engine.get_bias(symbol, tf)
-    momentum = momentum_engine.get_momentum(symbol, tf)
-    zone_label = demand_engine.get_label(symbol, tf)
+                       candle_engine=None, cache=None) -> StyleSnapshot:
+    structure = structure_engine.get_snapshot(symbol, tf, cache=cache)
+    bias = bias_engine.get_bias(symbol, tf, cache=cache)
+    momentum = momentum_engine.get_momentum(symbol, tf, cache=cache)
+    zone_label = demand_engine.get_label(symbol, tf, cache=cache)
 
     # Step 1: Build snapshot without shift info so conviction is computed
     snapshot = StyleSnapshot(
@@ -29,7 +29,7 @@ def get_style_snapshot(symbol, tf, mode,
     )
 
     # Step 2: Detect shift with conviction-aware coloring
-    shift_result = shift_engine.detect_shift(structure, tf, conviction=snapshot.conviction)
+    shift_result = shift_engine.detect_shift(structure, tf, conviction=snapshot.conviction, cache=cache)
 
     # Step 3: Duration
     last_change_time = shift_engine.get_last_shift_change_time(symbol, tf)

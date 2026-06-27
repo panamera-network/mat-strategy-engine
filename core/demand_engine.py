@@ -67,12 +67,12 @@ class DemandEngine:
     def __init__(self, candle_engine: CandleEngine):
         self.candle_engine = candle_engine
 
-    def get_zones(self, symbol: str, tf: str, count: int = 50) -> List[SupplyDemandZone]:
-        candles = self.candle_engine.get_snapshots(symbol, tf, count=count)
+    def get_zones(self, symbol: str, tf: str, count: int = 50, cache=None) -> List[SupplyDemandZone]:
+        candles = self.candle_engine.get_snapshots(symbol, tf, count=count, cache=cache)
         return detect_zones(candles)
 
-    def get_label(self, symbol: str, tf: str) -> str:
-        zones = self.get_zones(symbol, tf)
+    def get_label(self, symbol: str, tf: str, cache=None) -> str:
+        zones = self.get_zones(symbol, tf, cache=cache)
         active = [z for z in zones if z.valid]
         if not active:
             return "neutral"

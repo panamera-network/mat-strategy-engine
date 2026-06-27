@@ -16,8 +16,8 @@ class BiasEngine:
         self.candle_engine = candle_engine
         self.strength_engine = strength_engine
 
-    def get_bias(self, symbol: str, tf: str) -> BiasSnapshot:
-        candles = self.candle_engine.get_snapshots(symbol, tf)
+    def get_bias(self, symbol: str, tf: str, cache=None) -> BiasSnapshot:
+        candles = self.candle_engine.get_snapshots(symbol, tf, cache=cache)
         bias_label, bias_score = self.evaluate_bias(candles)
         strength = self.strength_engine.compute_strength(candles)
 
@@ -68,11 +68,11 @@ class BiasEngine:
         return bias_label, bias_score
 
 
-    def get_bias_map(self, symbol: str, timeframes: list[str]) -> dict[str, dict[str, float | str | StrengthDiagnostic]]:
+    def get_bias_map(self, symbol: str, timeframes: list[str], cache=None) -> dict[str, dict[str, float | str | StrengthDiagnostic]]:
         bias_map = {}
 
         for tf in timeframes:
-            candles = self.candle_engine.get_snapshots(symbol, tf)
+            candles = self.candle_engine.get_snapshots(symbol, tf, cache=cache)
             bias_label, bias_score = self.evaluate_bias(candles)
             strength = self.strength_engine.compute_strength(candles)
 

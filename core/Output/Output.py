@@ -113,13 +113,13 @@ def _compute_signal_confidence(bias_ordered: dict, scalping_snapshots: dict, sca
     return bias_conf, momentum_conf, align_conf
 
 
-def _build_structure_context(symbol: str, structure_engine) -> dict:
+def _build_structure_context(symbol: str, structure_engine, cache=None) -> dict:
     """Fetch one raw StructureSnapshot per timeframe — single source for
     strategy evaluation, SNR levels, order blocks, and FVGs below, so we
     don't re-fetch structure data per feature."""
     structure_map = {}
     for tf in BIAS_ORDER:
-        structure = structure_engine.get_snapshot(symbol, tf)
+        structure = structure_engine.get_snapshot(symbol, tf, cache=cache)
         if structure:
             structure_map[tf] = structure
     return structure_map
@@ -148,10 +148,10 @@ def _build_structure_extras(structure_map: dict) -> tuple:
     return snr_levels, order_blocks, fvg
 
 
-def _build_supply_demand_zones(symbol: str, demand_engine) -> dict:
+def _build_supply_demand_zones(symbol: str, demand_engine, cache=None) -> dict:
     zones = {}
     for tf in BIAS_ORDER:
-        tf_zones = [asdict(z) for z in demand_engine.get_zones(symbol, tf) if z.valid]
+        tf_zones = [asdict(z) for z in demand_engine.get_zones(symbol, tf, cache=cache) if z.valid]
         if tf_zones:
             zones[tf] = tf_zones
     return zones
@@ -166,13 +166,14 @@ def _build_symbol_snapshot(
     demand_engine,
     structure_engine,
     shift_engine,
+    cache=None,
 ) -> dict:
-    bias_map = bias_engine.get_bias_map(symbol, TIMEFRAMES)
+    bias_map = bias_engine.get_bias_map(symbol, TIMEFRAMES, cache=cache)
     prev_bias_map = prev_snapshot.get("bias")
 
     # --- Scalping ---
     scalping_map = {
-        tf: get_style_snapshot(symbol, tf, "scalping", bias_engine, momentum_engine, demand_engine, structure_engine, shift_engine)
+        tf: get_style_snapshot(symbol, tf, "scalping", bias_engine, momentum_engine, demand_engine, structure_engine, shift_engine, cache=cache)
         for tf in SCALPING_ORDER
     }
     scalping_alignment = compute_alignment_signal(scalping_map, mode="scalping")
@@ -185,7 +186,7 @@ def _build_symbol_snapshot(
 
     # --- Swing ---
     swing_map_raw = {
-        tf: get_style_snapshot(symbol, tf, "swing", bias_engine, momentum_engine, demand_engine, structure_engine, shift_engine)
+        tf: get_style_snapshot(symbol, tf, "swing", bias_engine, momentum_engine, demand_engine, structure_engine, shift_engine, cache=cache)
         for tf in SWING_ORDER
     }
     swing_alignment = compute_alignment_signal(swing_map_raw, mode="swing")
@@ -222,13 +223,13 @@ def _build_symbol_snapshot(
     display_block["health"] = build_symbol_health(symbol, display_block)
     display_block["signal_health"] = signal_health
 
-    structure_map = _build_structure_context(symbol, structure_engine)
+    structure_map = _build_structure_context(symbol, structure_engine, cache=cache)
     snr_levels, order_blocks, fvg = _build_structure_extras(structure_map)
     display_block["strategy_signals"] = _build_strategy_signals(symbol, structure_map)
     display_block["snr_levels"] = snr_levels
     display_block["order_blocks"] = order_blocks
     display_block["fvg"] = fvg
-    display_block["supply_demand_zones"] = _build_supply_demand_zones(symbol, demand_engine)
+    display_block["supply_demand_zones"] = _build_supply_demand_zones(symbol, demand_engine, cache=cache)
 
     # Cache for next pass (deltas, history, etc.)
     snapshot_cache.set(symbol, {
@@ -242,13 +243,13 @@ def _build_symbol_snapshot(
     return display_block
 
 
-def build_multi_symbol_output(bias_engine, candle_engine, momentum_engine, demand_engine, structure_engine, shift_engine) -> dict:
+def build_multi_symbol_output(bias_engine, candle_engine, momentum_engine, demand_engine, structure_engine, shift_engine, cache=None) -> dict:
     result = {}
     for symbol in SYMBOLS:
         prev_snapshot = snapshot_cache.get(symbol) or {}
         try:
             result[symbol] = _build_symbol_snapshot(
-                symbol, prev_snapshot, bias_engine, candle_engine, momentum_engine, demand_engine, structure_engine, shift_engine
+                symbol, prev_snapshot, bias_engine, candle_engine, momentum_engine, demand_engine, structure_engine, shift_engine, cache=cache
             )
         except Exception as e:
             logger.exception("[%s] snapshot failed", symbol)
