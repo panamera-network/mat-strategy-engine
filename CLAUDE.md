@@ -223,6 +223,27 @@ one-time MT5/symbol-resolution cold-start cost (not specific to this
 feature — same cold start happens on any first request); subsequent
 requests for 5 symbols took ~5s, vs ~15s for all 36.
 
+## `GET /core/history/{symbol}/{timeframe}` (2026-06-27)
+
+New endpoint in `api/core_router.py`, for charting — single
+symbol/timeframe OHLCV via `CandleEngine.get_snapshots()` (default
+`count=200`):
+```json
+{"symbol": "XAUUSD_i", "timeframe": "H1", "candles": [{"time": 1782504000, "open": 4085.08, "high": 4088.17, "low": 4073.66, "close": 4074.75, "volume": 17486.0}, ...]}
+```
+Distinct from `/api/mt5/history` (`routes/mt5_status.py`) — same underlying
+MT5 data, but goes through `CandleEngine` like the rest of `/core`, and
+wraps the candle list in a `{symbol, timeframe, candles}` envelope instead
+of returning a bare array. `timeframe` must be the engine's string format
+(`"H1"`, not `"1h"` or MT5-minutes) — same format used everywhere else
+under `/core`. Verified live against real MT5 data.
+
+Note: like every other `/core` endpoint, this goes through the broker's
+fuzzy `resolve_symbol()` — passing a typo'd or unresolvable symbol won't
+necessarily error, it may silently resolve to the closest fuzzy match
+(cutoff 0.6). Not new behavior, just worth knowing if a chart ever shows
+unexpected data for a bad symbol param.
+
 ## Other Folders — Status Check (reviewed 2026-06-21)
 
 ### `/tests` — broken, doesn't run

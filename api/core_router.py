@@ -35,6 +35,32 @@ shift_engine = ShiftEngine(candle_engine)
 def get_supported_symbols():
     return {"symbols": SYMBOLS}
 
+
+@router.get("/history/{symbol}/{timeframe}")
+def get_symbol_history(symbol: str, timeframe: str, count: int = 200):
+    """OHLCV history for a single symbol/timeframe — for charting.
+    Distinct from /api/mt5/history (routes/mt5_status.py): same underlying
+    MT5 data, but goes through CandleEngine like the rest of /core, and
+    returns a {symbol, timeframe, candles} envelope instead of a bare list."""
+    candles = candle_engine.get_snapshots(symbol, timeframe, count=count)
+
+    return {
+        "symbol": symbol,
+        "timeframe": timeframe,
+        "candles": [
+            {
+                "time": int(c.timestamp),
+                "open": c.open,
+                "high": c.high,
+                "low": c.low,
+                "close": c.close,
+                "volume": c.volume,
+            }
+            for c in candles
+        ],
+    }
+
+
 @router.get("/diagnostics/bias")
 def get_bias_diagnostics(symbol: str, timeframes: List[str] = ["M1", "M5", "M15", "M30", "H1", "H4", "D1"]):
     bias_map = bias_engine.get_bias_map(symbol, timeframes)
