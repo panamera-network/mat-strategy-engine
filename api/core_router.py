@@ -208,6 +208,57 @@ def get_output_snapshots_filtered(body: OutputRequest = OutputRequest()):
 
     return result
 
+def _slim_symbol_block(block: dict) -> dict:
+    """Project a full symbol output block down to the slim contract:
+    bias per TF (label/score/strength only), signal_health, the two
+    alignment signals, and the SMC maps."""
+    if "error" in block:
+        return block
+
+    bias = {
+        tf: {k: v for k, v in tf_data.items() if k in ("label", "score", "strength")}
+        for tf, tf_data in block.get("bias", {}).items()
+    }
+
+    return {
+        "bias": bias,
+        "signal_health": block.get("signal_health"),
+        "scalping": {"alignment_signal": block.get("scalping", {}).get("alignment_signal")},
+        "swing": {"alignment_signal": block.get("swing", {}).get("alignment_signal")},
+        "snr_levels": block.get("snr_levels", {}),
+        "order_blocks": block.get("order_blocks", {}),
+        "fvg": block.get("fvg", {}),
+        "supply_demand_zones": block.get("supply_demand_zones", {}),
+    }
+
+
+@router.get("/slim/{symbols}")
+def get_slim_output(symbols: str):
+    """Lightweight per-symbol output for dashboards: same pipeline as
+    /output (request-scoped CandleCache, symbol-filtered), but each block
+    is trimmed to bias/signal_health/alignment signals + SMC maps.
+    `symbols` is comma-separated, e.g. /core/slim/XAUUSD_i,EURUSD_i."""
+    target_symbols = [s.strip() for s in symbols.split(",") if s.strip()]
+    if not target_symbols:
+        raise HTTPException(status_code=400, detail="No symbols given")
+
+    cache = CandleCache(candle_engine)
+    cache.fetch_all(target_symbols, TIMEFRAMES, count=100)
+
+    full = build_multi_symbol_output(
+        bias_engine=bias_engine,
+        candle_engine=candle_engine,
+        momentum_engine=momentum_engine,
+        demand_engine=demand_engine,
+        shift_engine=shift_engine,
+        structure_engine=structure_engine,
+        cache=cache,
+        symbols=target_symbols,
+    )
+
+    return {symbol: _slim_symbol_block(block) for symbol, block in full.items()}
+
+
 @router.websocket("/output/ws")
 async def output_stream(websocket: WebSocket):
     await websocket.accept()
