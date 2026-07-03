@@ -229,6 +229,7 @@ def _slim_symbol_block(block: dict) -> dict:
         "order_blocks": block.get("order_blocks", {}),
         "fvg": block.get("fvg", {}),
         "supply_demand_zones": block.get("supply_demand_zones", {}),
+        "strategy_signals": block.get("strategy_signals", []),
     }
 
 
