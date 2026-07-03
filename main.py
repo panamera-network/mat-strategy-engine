@@ -31,15 +31,16 @@ async def lifespan(app: FastAPI):
 # 🚀 Create the app
 app = FastAPI(lifespan=lifespan)
 
-# 🌐 CORS setup
+# 🌐 CORS setup — any localhost port (dashboard dev, MAT_ai_mk1 dev/preview),
+# plus "null" for the packaged MAT_ai_mk1 Electron app (file:// origin).
 origins = [
-    "http://localhost:5173",
-    "http://localhost:5174",
+    "null",
 ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
