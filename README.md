@@ -5,13 +5,14 @@ multi-timeframe bias/momentum/structure analysis per symbol, evaluates a
 plugin-based strategy layer on top, and serves the result as structured JSON
 for the dashboard to consume.
 
-This repo is one of three apps in the MAT.ai ecosystem:
+This repo is one of several apps in the MAT.ai ecosystem:
 
 | App | Role |
 |---|---|
 | **engine** *(this repo)* | MT5 calculation + strategy evaluation → JSON |
 | **dashboard** | Viewer/UI — consumes this engine's JSON, draws charts |
-| **agent** | Reasons directly off the JSON this engine produces |
+| **agent** (MAT-AI-OS) | Reasons directly off the JSON this engine produces — its trade-suggestion flow calls `GET /core/slim/{symbol}` for analysis |
+| **MAT_ai_mk1** + **mat-ai-mk1-mobile** | Desktop/mobile trading workstations — consume `GET /core/slim/{symbols}` and `GET /core/history/{symbol}/{timeframe}` directly for their bias table + candlestick chart |
 
 ## How it fits together
 
@@ -52,7 +53,11 @@ it loads automatically. No registration, no editing `StrategyEngine.py`.
 
 | Route | Purpose |
 |---|---|
-| `GET /core/output` | Main feed — bias/scalping/swing/health + strategy signals, per symbol |
+| `GET /core/output` | Main feed — bias/scalping/swing/health + strategy signals, per symbol (all 36 symbols) |
+| `POST /core/output` | Same as above, filtered to a `{"symbols": [...]}` body — much faster for a small selection |
+| `GET /core/slim/{symbols}` | Lightweight feed for dashboards — comma-separated symbols, trimmed to bias/signal_health/alignment signals + SNR/order-block/FVG/supply-demand maps + strategy signals |
+| `GET /core/history/{symbol}/{timeframe}` | OHLCV candles for one symbol/timeframe — powers candlestick charts |
+| `GET /core/symbols` | List every supported symbol |
 | `GET /core/strategies` | List strategy plugins + enabled state |
 | `PATCH /core/strategies/{name}` | Toggle a strategy on/off |
 | `POST /core/evaluate` | Run strategies against a manually supplied snapshot/context |
@@ -114,3 +119,10 @@ architecture notes.
   See `scripts/` for manual debug scripts.
 - `requirements.txt` is currently unpinned by design (revisit before
   production deploy).
+- Every `/core/output`-family request builds one request-scoped `CandleCache`
+  (`core/candle_cache.py`) that batch-fetches every (symbol, timeframe) pair
+  once from MT5 — every engine underneath reads through it instead of
+  re-fetching, which is what makes `POST /core/output`/`GET /core/slim`
+  practical for a small symbol selection.
+- CORS allows any `localhost`/`127.0.0.1` port plus the `null` origin (for
+  the packaged Electron apps loading from `file://`) — see `main.py`.
