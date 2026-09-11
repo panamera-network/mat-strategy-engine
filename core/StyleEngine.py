@@ -12,7 +12,9 @@ def get_style_snapshot(symbol, tf, mode,
                        demand_engine, structure_engine, shift_engine,
                        candle_engine=None, cache=None) -> StyleSnapshot:
     structure = structure_engine.get_snapshot(symbol, tf, cache=cache)
-    bias = bias_engine.get_bias(symbol, tf, cache=cache)
+    # Reuse the structure snapshot just fetched above so bias's BOS/CHoCH
+    # always matches StructureEngine's — see BiasEngine.evaluate_bias().
+    bias = bias_engine.get_bias(symbol, tf, structure_snapshot=structure, cache=cache)
     momentum = momentum_engine.get_momentum(symbol, tf, cache=cache)
     zone_label = demand_engine.get_label(symbol, tf, cache=cache)
 

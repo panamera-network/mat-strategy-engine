@@ -1,10 +1,9 @@
 
 import logging
-from typing import Dict, List
+from typing import Dict, List, Optional
 from core.CandleEngine import CandleEngine
 from core.StrengthEngine import StrengthEngine
-from core.structure_utils import detect_structure_event, find_swings
-from core.core_models import BiasSnapshot, CandleSnapshot, StrengthDiagnostic
+from core.core_models import BiasSnapshot, CandleSnapshot, StrengthDiagnostic, StructureSnapshot
 
 logger = logging.getLogger(__name__)
 
@@ -12,13 +11,30 @@ STRUCTURE_BIAS_SCORE = {"BOS": 8.0, "CHOCH": 10.0}  # CHoCH = trend flip, strong
 
 
 class BiasEngine:
-    def __init__(self, candle_engine: CandleEngine, strength_engine: StrengthEngine):
+    def __init__(self, candle_engine: CandleEngine, strength_engine: StrengthEngine, structure_engine=None):
         self.candle_engine = candle_engine
         self.strength_engine = strength_engine
+        # Optional — injected by the composition root (api/core_router.py).
+        # Not imported at module level (would recreate the circular import
+        # structure_utils.py was split out to avoid: StructureEngine ->
+        # SuppressionEngine -> BiasEngine). When a caller doesn't hand in an
+        # explicit structure_snapshot/structure_map (get_bias/get_bias_map
+        # below), this is used to resolve one anyway — so every caller ends
+        # up on StructureEngine.get_snapshot()'s result, never a homegrown
+        # detection, whether or not it bothers to pass one in explicitly.
+        self.structure_engine = structure_engine
 
-    def get_bias(self, symbol: str, tf: str, cache=None) -> BiasSnapshot:
+    def _resolve_structure(self, symbol: str, tf: str, structure_snapshot: Optional[StructureSnapshot], cache=None) -> Optional[StructureSnapshot]:
+        if structure_snapshot is not None:
+            return structure_snapshot
+        if self.structure_engine is not None:
+            return self.structure_engine.get_snapshot(symbol, tf, cache=cache)
+        return None
+
+    def get_bias(self, symbol: str, tf: str, structure_snapshot: Optional[StructureSnapshot] = None, cache=None) -> BiasSnapshot:
         candles = self.candle_engine.get_snapshots(symbol, tf, cache=cache)
-        bias_label, bias_score = self.evaluate_bias(candles)
+        structure_snapshot = self._resolve_structure(symbol, tf, structure_snapshot, cache=cache)
+        bias_label, bias_score = self.evaluate_bias(candles, structure_snapshot=structure_snapshot)
         strength = self.strength_engine.compute_strength(candles)
 
         return BiasSnapshot(
@@ -35,23 +51,30 @@ class BiasEngine:
             for tf in timeframes
         }
 
-    
-    def evaluate_bias(self, candles: list[CandleSnapshot]) -> tuple[str, float]:
+
+    def evaluate_bias(self, candles: list[CandleSnapshot], structure_snapshot: Optional[StructureSnapshot] = None) -> tuple[str, float]:
         if not candles:
             return "neutral", 0.0
 
-        # Structure-driven bias first: BOS/CHoCH overrides the candle-ratio fallback.
-        swing_highs, swing_lows = find_swings(candles)
-        structure_event = detect_structure_event(candles, swing_highs, swing_lows)
-
-        if structure_event["valid"] and structure_event["type"] in STRUCTURE_BIAS_SCORE:
-            direction = structure_event["direction"]
-            score = STRUCTURE_BIAS_SCORE[structure_event["type"]]
+        # BOS/CHoCH is StructureEngine's sole responsibility now — consume its
+        # result instead of detecting structure independently here. (Previously
+        # this ran find_swings()/detect_structure_event() on whatever candle
+        # window get_snapshots() returned by default, which is a different
+        # window than StructureEngine's own SWING_LOOKBACK slice — the two
+        # engines could disagree on BOS/CHoCH for the same symbol/tf.)
+        if (
+            structure_snapshot is not None
+            and structure_snapshot.structure_valid
+            and structure_snapshot.structure_type in STRUCTURE_BIAS_SCORE
+        ):
+            direction = structure_snapshot.structure_direction
+            score = STRUCTURE_BIAS_SCORE[structure_snapshot.structure_type]
             bias_score = score if direction == "Bullish" else -score
             bias_label = "uptrend" if direction == "Bullish" else "downtrend"
             return bias_label, bias_score
 
-        # Fallback: no confirmed BOS/CHoCH — use the existing candle-ratio logic.
+        # Fallback: no confirmed BOS/CHoCH (or no structure snapshot supplied)
+        # — use the existing candle-ratio logic.
         up_closes = sum(1 for c in candles if c.close > c.open)
         down_closes = sum(1 for c in candles if c.close < c.open)
 
@@ -68,12 +91,14 @@ class BiasEngine:
         return bias_label, bias_score
 
 
-    def get_bias_map(self, symbol: str, timeframes: list[str], cache=None) -> dict[str, dict[str, float | str | StrengthDiagnostic]]:
+    def get_bias_map(self, symbol: str, timeframes: list[str], structure_map: Optional[dict[str, StructureSnapshot]] = None, cache=None) -> dict[str, dict[str, float | str | StrengthDiagnostic]]:
         bias_map = {}
 
         for tf in timeframes:
             candles = self.candle_engine.get_snapshots(symbol, tf, cache=cache)
-            bias_label, bias_score = self.evaluate_bias(candles)
+            structure_snapshot = structure_map.get(tf) if structure_map else None
+            structure_snapshot = self._resolve_structure(symbol, tf, structure_snapshot, cache=cache)
+            bias_label, bias_score = self.evaluate_bias(candles, structure_snapshot=structure_snapshot)
             strength = self.strength_engine.compute_strength(candles)
 
             bias_map[tf] = {

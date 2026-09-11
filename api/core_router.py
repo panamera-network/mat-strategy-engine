@@ -25,10 +25,14 @@ router = APIRouter()
 # Instantiate shared engines
 candle_engine = CandleEngine()
 strength_engine = StrengthEngine()
-bias_engine = BiasEngine(candle_engine, strength_engine)
+structure_engine = StructureEngine(candle_engine)
+# structure_engine injected so BiasEngine resolves BOS/CHoCH through the same
+# StructureEngine.get_snapshot() every other caller uses, even when a caller
+# doesn't explicitly hand in a structure_snapshot/structure_map (see
+# BiasEngine._resolve_structure()) — no independent detection either way.
+bias_engine = BiasEngine(candle_engine, strength_engine, structure_engine=structure_engine)
 momentum_engine = MomentumEngine(candle_engine)
 demand_engine = DemandEngine(candle_engine)
-structure_engine = StructureEngine(candle_engine)
 shift_engine = ShiftEngine(candle_engine)
 
 @router.get("/symbols")

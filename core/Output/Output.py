@@ -168,7 +168,13 @@ def _build_symbol_snapshot(
     shift_engine,
     cache=None,
 ) -> dict:
-    bias_map = bias_engine.get_bias_map(symbol, TIMEFRAMES, cache=cache)
+    # Fetched before bias_map so BiasEngine can consume the same BOS/CHoCH
+    # result instead of detecting structure independently (single source of
+    # truth — see BiasEngine.evaluate_bias()). Also reused below for SNR
+    # levels, order blocks, FVGs, and strategy evaluation — one fetch either way.
+    structure_map = _build_structure_context(symbol, structure_engine, cache=cache)
+
+    bias_map = bias_engine.get_bias_map(symbol, TIMEFRAMES, structure_map=structure_map, cache=cache)
     prev_bias_map = prev_snapshot.get("bias")
 
     # --- Scalping ---
@@ -223,7 +229,6 @@ def _build_symbol_snapshot(
     display_block["health"] = build_symbol_health(symbol, display_block)
     display_block["signal_health"] = signal_health
 
-    structure_map = _build_structure_context(symbol, structure_engine, cache=cache)
     snr_levels, order_blocks, fvg = _build_structure_extras(structure_map)
     display_block["strategy_signals"] = _build_strategy_signals(symbol, structure_map)
     display_block["snr_levels"] = snr_levels
