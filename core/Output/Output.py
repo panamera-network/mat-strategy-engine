@@ -141,11 +141,32 @@ def _build_strategy_signals(symbol: str, structure_map: dict) -> list:
 
 
 def _build_structure_extras(structure_map: dict) -> tuple:
-    """Per-timeframe SNR levels, order blocks, and FVGs as plain dicts."""
+    """Per-timeframe SNR levels, order blocks, FVGs, swing points, and
+    BOS/CHoCH events — all read directly off the StructureSnapshot objects
+    already in structure_map (Fix #2's swing_points/event_broken_level/
+    event_index/event_timestamp/structure_type/structure_direction). No
+    recalculation, no new StructureEngine calls.
+
+    structure_events' shape (type/direction/broken_level/event_index/
+    event_timestamp) is the canonical engine contract (Fix #3) — StructureEngine
+    is the single source of truth for this evidence; this is a straight
+    projection of its fields, not a second/derived definition."""
     snr_levels = {tf: [asdict(lvl) for lvl in s.snr_levels] for tf, s in structure_map.items() if s.snr_levels}
     order_blocks = {tf: [asdict(ob) for ob in s.order_blocks] for tf, s in structure_map.items() if s.order_blocks}
     fvg = {tf: [asdict(f) for f in s.fvg] for tf, s in structure_map.items() if s.fvg}
-    return snr_levels, order_blocks, fvg
+    swing_points = {tf: [asdict(sp) for sp in s.swing_points] for tf, s in structure_map.items() if s.swing_points}
+    structure_events = {
+        tf: {
+            "type": s.structure_type,
+            "direction": s.structure_direction,
+            "broken_level": s.event_broken_level,
+            "event_index": s.event_index,
+            "event_timestamp": s.event_timestamp,
+        }
+        for tf, s in structure_map.items()
+        if s.structure_valid
+    }
+    return snr_levels, order_blocks, fvg, swing_points, structure_events
 
 
 def _build_supply_demand_zones(symbol: str, demand_engine, cache=None) -> dict:
@@ -229,11 +250,13 @@ def _build_symbol_snapshot(
     display_block["health"] = build_symbol_health(symbol, display_block)
     display_block["signal_health"] = signal_health
 
-    snr_levels, order_blocks, fvg = _build_structure_extras(structure_map)
+    snr_levels, order_blocks, fvg, swing_points, structure_events = _build_structure_extras(structure_map)
     display_block["strategy_signals"] = _build_strategy_signals(symbol, structure_map)
     display_block["snr_levels"] = snr_levels
     display_block["order_blocks"] = order_blocks
     display_block["fvg"] = fvg
+    display_block["swing_points"] = swing_points
+    display_block["structure_events"] = structure_events
     display_block["supply_demand_zones"] = _build_supply_demand_zones(symbol, demand_engine, cache=cache)
 
     # Cache for next pass (deltas, history, etc.)
