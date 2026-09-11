@@ -4,7 +4,7 @@ without creating an import cycle (StructureEngine pulls in SuppressionEngine,
 which pulls in BiasEngine)."""
 from typing import Dict, List, Tuple
 
-from core.core_models import CandleSnapshot, SNRLevel
+from core.core_models import CandleSnapshot, SNRLevel, SwingPoint
 
 SWING_LOOKBACK = 20
 SWING_WINDOW = 3
@@ -54,9 +54,14 @@ def detect_trend(candles: List[CandleSnapshot], swing_highs: List[int], swing_lo
 
 def detect_structure_event(candles: List[CandleSnapshot], swing_highs: List[int], swing_lows: List[int]) -> Dict:
     """BOS = break in the direction of the existing trend (continuation).
-    CHoCH = break against the existing trend (trend flip)."""
+    CHoCH = break against the existing trend (trend flip).
+
+    `broken_level` (Fix #2) is the actual swing high/low price that was
+    breached — last_swing_high/last_swing_low below were already computed
+    for the comparisons, just exposed on the return value now, not a new
+    calculation and not a formula change."""
     if not swing_highs or not swing_lows:
-        return {"type": "None", "direction": "Neutral", "valid": False, "index": len(candles) - 1}
+        return {"type": "None", "direction": "Neutral", "valid": False, "index": len(candles) - 1, "broken_level": None}
 
     last_swing_high = candles[swing_highs[-1]].high
     last_swing_low = candles[swing_lows[-1]].low
@@ -66,13 +71,48 @@ def detect_structure_event(candles: List[CandleSnapshot], swing_highs: List[int]
 
     if curr.close > last_swing_high:
         event_type = "CHOCH" if trend == "Bearish" else "BOS"
-        return {"type": event_type, "direction": "Bullish", "valid": True, "index": break_index}
+        return {"type": event_type, "direction": "Bullish", "valid": True, "index": break_index, "broken_level": last_swing_high}
 
     if curr.close < last_swing_low:
         event_type = "CHOCH" if trend == "Bullish" else "BOS"
-        return {"type": event_type, "direction": "Bearish", "valid": True, "index": break_index}
+        return {"type": event_type, "direction": "Bearish", "valid": True, "index": break_index, "broken_level": last_swing_low}
 
-    return {"type": "None", "direction": "Neutral", "valid": False, "index": break_index}
+    return {"type": "None", "direction": "Neutral", "valid": False, "index": break_index, "broken_level": None}
+
+
+def label_swing_points(
+    candles: List[CandleSnapshot],
+    swing_highs: List[int],
+    swing_lows: List[int],
+) -> List[SwingPoint]:
+    """HH/LH/LL/HL evidence for every confirmed swing point — price +
+    index/timestamp. Independent of derive_snr_levels() below (which tags
+    this same classification onto SNRLevel.source as a side effect of
+    building resistance/support levels) so structure evidence doesn't
+    require touching SNR level construction. Same classification rule,
+    computed separately."""
+    points: List[SwingPoint] = []
+
+    for idx, swing_i in enumerate(swing_highs):
+        label = "HH" if idx > 0 and candles[swing_i].high > candles[swing_highs[idx - 1]].high else "LH"
+        points.append(SwingPoint(
+            label=label,
+            price=candles[swing_i].high,
+            index=swing_i,
+            timestamp=str(candles[swing_i].timestamp),
+        ))
+
+    for idx, swing_i in enumerate(swing_lows):
+        label = "LL" if idx > 0 and candles[swing_i].low < candles[swing_lows[idx - 1]].low else "HL"
+        points.append(SwingPoint(
+            label=label,
+            price=candles[swing_i].low,
+            index=swing_i,
+            timestamp=str(candles[swing_i].timestamp),
+        ))
+
+    points.sort(key=lambda p: p.index)
+    return points
 
 
 def derive_snr_levels(candles: List[CandleSnapshot], swing_highs: List[int], swing_lows: List[int], structure_event: Dict) -> List[SNRLevel]:

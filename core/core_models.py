@@ -125,6 +125,19 @@ class StrategyMode(str, Enum):
 
 
 @dataclass
+class SwingPoint:
+    """One confirmed swing high/low — HH/LH (highs) or LL/HL (lows) — with
+    its price and its index/timestamp within the candle window StructureEngine
+    evaluated. Same classification rule derive_snr_levels() already tags onto
+    SNRLevel.source, exposed here standalone so it doesn't require touching
+    SNR level construction."""
+    label: str            # "HH", "LH", "LL", or "HL"
+    price: float
+    index: int             # index into the evaluated candle window
+    timestamp: str | None = None
+
+
+@dataclass
 class SNRLevel:
     type: str            # "Resistance" or "Support"
     level: float
@@ -182,6 +195,15 @@ class StructureSnapshot:
     snr_levels: List[SNRLevel] = field(default_factory=list)
     order_blocks: List[OrderBlock] = field(default_factory=list)
     fvg: List[FVG] = field(default_factory=list)
+    # Fix #2 — structure evidence, exposed by StructureEngine only:
+    # HH/HL/LH/LL swing points, and BOS/CHoCH event evidence (the level
+    # broken, its index, and timestamp) beyond bare type/direction/valid.
+    # event_index/event_timestamp are None when there's no valid event,
+    # same as event_broken_level.
+    swing_points: List[SwingPoint] = field(default_factory=list)
+    event_broken_level: float | None = None
+    event_index: int | None = None
+    event_timestamp: str | None = None
 
     def __post_init__(self):
         self.structure_type = self.detect_structure_label()

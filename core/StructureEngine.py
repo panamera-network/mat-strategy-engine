@@ -16,6 +16,7 @@ from core.structure_utils import (
     detect_trend,
     derive_snr_levels,
     find_swings,
+    label_swing_points,
 )
 
 candle_engine = CandleEngine()
@@ -39,9 +40,20 @@ class StructureEngine:
         lookback = candles[-SWING_LOOKBACK:] if len(candles) > SWING_LOOKBACK else candles
         swing_highs, swing_lows = find_swings(lookback)
         structure_event = detect_structure_event(lookback, swing_highs, swing_lows)
+        swing_points = label_swing_points(lookback, swing_highs, swing_lows)
         snr_levels = derive_snr_levels(lookback, swing_highs, swing_lows, structure_event)
         order_blocks = detect_order_blocks(lookback, [structure_event], timeframe=tf)
         fvg = detect_fvg(lookback, timeframe=tf)
+
+        # Fix #2 — event index/timestamp evidence, derived independently
+        # here so this evidence works standalone. None when there's no
+        # valid event, same as broken_level.
+        event_index = structure_event.get("index") if structure_event.get("valid") else None
+        event_timestamp = (
+            str(lookback[event_index].timestamp)
+            if isinstance(event_index, int) and 0 <= event_index < len(lookback)
+            else None
+        )
 
         prev, curr = candles[-2], candles[-1]
         price = PriceSnapshot(
@@ -70,6 +82,10 @@ class StructureEngine:
             snr_levels=snr_levels,
             order_blocks=order_blocks,
             fvg=fvg,
+            swing_points=swing_points,
+            event_broken_level=structure_event.get("broken_level"),
+            event_index=event_index,
+            event_timestamp=event_timestamp,
         )
 
         snapshot.structure_type = structure_event["type"]
