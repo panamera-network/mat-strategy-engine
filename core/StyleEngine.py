@@ -16,7 +16,10 @@ def get_style_snapshot(symbol, tf, mode,
     # always matches StructureEngine's — see BiasEngine.evaluate_bias().
     bias = bias_engine.get_bias(symbol, tf, structure_snapshot=structure, cache=cache)
     momentum = momentum_engine.get_momentum(symbol, tf, cache=cache)
-    zone_label = demand_engine.get_label(symbol, tf, cache=cache)
+    # Fix #4D1 — structure.context_zone already IS the canonical
+    # DemandEngine.get_context() result (Fix #4C); calling get_label() here
+    # would just recompute detect_zones() a second time for the same answer.
+    zone_label = structure.context_zone
 
     # Step 1: Build snapshot without shift info so conviction is computed
     snapshot = StyleSnapshot(
