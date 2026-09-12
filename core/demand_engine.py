@@ -336,6 +336,82 @@ def classify_zones(zones: List[SupplyDemandZone], swing_points: List[SwingPoint]
     return zones
 
 
+def link_zone_to_leg_origin(
+    zones: List[SupplyDemandZone],
+    structure_valid: bool,
+    structure_direction: str,
+    leg_origin_timestamp: Optional[str],
+    leg_origin_price: Optional[float],
+    event_timestamp: Optional[str],
+    timeframe: str = "",
+) -> Optional[SupplyDemandZone]:
+    """Fix #5G1 — deterministic zone <-> structural leg origin link, for
+    the CURRENT/latest structure event only (no history, per Fix #5G's
+    audit). Read-only: does not touch zone detection, the zone selector,
+    classification, or freshness semantics — valid/mitigated/touch_count/
+    impulse_strength are deliberately NOT used as filters or ranking here
+    (a zone that has since been touched or even invalidated can still be
+    the historically-correct origin of a leg that started at its
+    formation; freshness today is irrelevant to what happened back then).
+
+    Requires a valid structure event and complete leg_origin_* evidence —
+    anything missing returns None immediately, never a guess.
+    Bullish -> demand candidates only; Bearish -> supply candidates only
+    (a zone of the wrong type cannot be the origin of a leg that direction,
+    by the zones' own definitions).
+    A candidate must have a timestamp within the same SWING_WINDOW-derived
+    tolerance already used elsewhere (_swing_tolerance_seconds) of
+    leg_origin_timestamp, AND must have leg_origin_price fall exactly
+    within its [bottom, top] range (no separate price tolerance — an exact
+    containment check, confirming the zone occupies the same price
+    territory as the origin swing).
+
+    Fix #5G1A — causality guard: a candidate's timestamp must not be LATER
+    than event_timestamp (the candle where the break itself was detected).
+    A zone that formed after the break already happened cannot possibly be
+    the origin of the leg that produced that break — proximity and price
+    containment alone don't rule this out, so it's checked explicitly.
+    event_timestamp missing -> None (can't confirm causality without it).
+
+    Among passing candidates, the smallest timestamp distance (to
+    leg_origin_timestamp) wins; an exact tie is broken by the LATER list
+    item, matching select_active_zone()'s existing tie-break convention.
+    No candidate -> None, never a forced/nearest fallback."""
+    if not structure_valid or structure_direction not in ("Bullish", "Bearish"):
+        return None
+    if leg_origin_timestamp is None or leg_origin_price is None or event_timestamp is None:
+        return None
+
+    origin_ts = _safe_int(leg_origin_timestamp)
+    event_ts = _safe_int(event_timestamp)
+    if origin_ts is None or event_ts is None:
+        return None
+
+    tolerance = _swing_tolerance_seconds(timeframe)
+    wanted_type = "demand" if structure_direction == "Bullish" else "supply"
+
+    best_zone: Optional[SupplyDemandZone] = None
+    best_distance: Optional[int] = None
+    for zone in zones:
+        if zone.type != wanted_type:
+            continue
+        zone_ts = _safe_int(zone.timestamp)
+        if zone_ts is None:
+            continue
+        if zone_ts > event_ts:  # Fix #5G1A — causality guard
+            continue
+        distance = abs(zone_ts - origin_ts)
+        if distance > tolerance:
+            continue
+        if not (zone.bottom <= leg_origin_price <= zone.top):
+            continue
+        if best_distance is None or distance <= best_distance:  # <=, not < — later zone wins on a tie
+            best_zone = zone
+            best_distance = distance
+
+    return best_zone
+
+
 class DemandEngine:
     def __init__(self, candle_engine: CandleEngine):
         self.candle_engine = candle_engine

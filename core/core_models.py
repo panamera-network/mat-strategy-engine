@@ -213,6 +213,15 @@ class StructureSnapshot:
     leg_origin_timestamp: str | None = None
     leg_origin_price: float | None = None
     leg_origin_swing_label: str | None = None
+    # Fix #5G1 — deterministic zone <-> leg origin link, minimal evidence
+    # only (never the whole zone object): which zone (if any) was matched
+    # as the likely origin of the current structural leg. See
+    # core.demand_engine.link_zone_to_leg_origin() for the matching rule.
+    # None when no zone matched (or no confirmed event at all).
+    origin_zone_type: str | None = None
+    origin_zone_timestamp: str | None = None
+    origin_zone_top: float | None = None
+    origin_zone_bottom: float | None = None
 
     def __post_init__(self):
         self.structure_type = self.detect_structure_label()

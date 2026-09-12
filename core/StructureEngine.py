@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from core.CandleEngine import CandleEngine
-from core.demand_engine import DemandEngine
+from core.demand_engine import DemandEngine, link_zone_to_leg_origin
 from core.FVGEngine import detect_fvg
 from core.MomentumEngine import MomentumEngine
 from core.OrderBlockEngine import detect_order_blocks
@@ -85,6 +85,20 @@ class StructureEngine:
         else:
             context_zone, context_level = "neutral", None
 
+        # Fix #5G1 — deterministic zone <-> leg origin link, reusing the
+        # same `zones` list already available here (no new detect_zones()
+        # call). See link_zone_to_leg_origin() for the matching rule; None
+        # when there's no confirmed event or no zone satisfies it.
+        origin_zone = link_zone_to_leg_origin(
+            zones if zones is not None else [],
+            structure_valid=structure_event.get("valid", False),
+            structure_direction=structure_event.get("direction", "Neutral"),
+            leg_origin_timestamp=structure_event.get("leg_origin_timestamp"),
+            leg_origin_price=structure_event.get("leg_origin_price"),
+            event_timestamp=event_timestamp,
+            timeframe=tf,
+        )
+
         snapshot = StructureSnapshot(
             symbol=symbol,
             timeframe=tf,
@@ -112,6 +126,11 @@ class StructureEngine:
             leg_origin_timestamp=structure_event.get("leg_origin_timestamp"),
             leg_origin_price=structure_event.get("leg_origin_price"),
             leg_origin_swing_label=structure_event.get("leg_origin_swing_label"),
+            # Fix #5G1 — minimal evidence only, never the whole zone object.
+            origin_zone_type=origin_zone.type if origin_zone else None,
+            origin_zone_timestamp=origin_zone.timestamp if origin_zone else None,
+            origin_zone_top=origin_zone.top if origin_zone else None,
+            origin_zone_bottom=origin_zone.bottom if origin_zone else None,
         )
 
         snapshot.structure_type = structure_event["type"]

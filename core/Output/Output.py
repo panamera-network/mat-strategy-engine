@@ -176,6 +176,14 @@ def _build_structure_extras(structure_map: dict) -> tuple:
             "leg_origin_timestamp": s.leg_origin_timestamp,
             "leg_origin_price": s.leg_origin_price,
             "leg_origin_swing_label": s.leg_origin_swing_label,
+            # Fix #5G1 — deterministic zone <-> leg origin link, minimal
+            # evidence only (never the whole zone object). Wiring only —
+            # the matching rule itself lives in
+            # core.demand_engine.link_zone_to_leg_origin().
+            "origin_zone_type": s.origin_zone_type,
+            "origin_zone_timestamp": s.origin_zone_timestamp,
+            "origin_zone_top": s.origin_zone_top,
+            "origin_zone_bottom": s.origin_zone_bottom,
         }
         for tf, s in structure_map.items()
         if s.structure_valid
