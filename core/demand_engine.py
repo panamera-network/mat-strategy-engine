@@ -2,10 +2,29 @@ from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
 from core.CandleEngine import CandleEngine
-from core.core_models import CandleSnapshot
+from core.core_models import CandleSnapshot, SwingPoint
+from core.structure_utils import SWING_WINDOW
 
 ATR_PERIOD = 14
 BODY_ATR_RATIO = 0.6  # candle body must exceed 60% of ATR to mark a zone
+
+# Fix #5B — seconds per candle, keyed the same as everywhere else under
+# /core (M1..MN1). Local to this module rather than importing
+# mt5/timeframes.py, which pulls in the MetaTrader5 package at import time —
+# classify_zone()/classify_zones() below stay pure and testable without a
+# live MT5 connection, same as the rest of this file. MN1 approximated as a
+# flat 30 days.
+TIMEFRAME_SECONDS = {
+    "M1": 60,
+    "M5": 300,
+    "M15": 900,
+    "M30": 1800,
+    "H1": 3600,
+    "H4": 14400,
+    "D1": 86400,
+    "W1": 604800,
+    "MN1": 2592000,
+}
 
 
 @dataclass
@@ -16,6 +35,17 @@ class SupplyDemandZone:
     valid: bool = True
     strength: float = 0.0
     mitigated: bool = False
+    # Fix #5B — pattern/timestamp adopted as canonical (minimum needed for
+    # classification below); status/touches/candle_index deliberately left
+    # out — still WIP-only, not needed for reversal/continuation/unknown.
+    pattern: str = ""
+    timestamp: str | None = None
+    # Additive location-in-move label: "reversal", "continuation", or
+    # "unknown". Not set by detect_zones() itself (zone detection/
+    # thresholds/boundaries unchanged) — filled in afterward by
+    # classify_zone()/classify_zones(), which need StructureEngine's
+    # swing_points and are not wired into any live caller yet.
+    classification: str = "unknown"
 
 
 def compute_atr(candles: List[CandleSnapshot], period: int = ATR_PERIOD) -> float:
@@ -48,9 +78,23 @@ def detect_zones(candles: List[CandleSnapshot]) -> List[SupplyDemandZone]:
             continue
 
         if c.close > c.open:
-            zone = SupplyDemandZone(type="demand", top=c.open, bottom=c.low, strength=round(body / atr, 2))
+            zone = SupplyDemandZone(
+                type="demand",
+                top=c.open,
+                bottom=c.low,
+                strength=round(body / atr, 2),
+                pattern=_zone_pattern(candles, i, "demand"),
+                timestamp=str(c.timestamp),
+            )
         else:
-            zone = SupplyDemandZone(type="supply", top=c.high, bottom=c.open, strength=round(body / atr, 2))
+            zone = SupplyDemandZone(
+                type="supply",
+                top=c.high,
+                bottom=c.open,
+                strength=round(body / atr, 2),
+                pattern=_zone_pattern(candles, i, "supply"),
+                timestamp=str(c.timestamp),
+            )
 
         for later in candles[i + 1:]:
             if zone.bottom <= later.close <= zone.top:
@@ -63,13 +107,51 @@ def detect_zones(candles: List[CandleSnapshot]) -> List[SupplyDemandZone]:
     return zones
 
 
+def _direction(candle: CandleSnapshot, atr: float = 0.0) -> str:
+    """Fix #5B — minimum helper needed for _zone_pattern() below (pattern
+    is now canonical). Not exposed/used for anything else."""
+    body = abs(candle.close - candle.open)
+    if atr > 0 and body < atr * 0.25:
+        return "base"
+    if candle.close > candle.open:
+        return "rally"
+    if candle.close < candle.open:
+        return "drop"
+    return "base"
+
+
+def _zone_pattern(candles: List[CandleSnapshot], index: int, zone_type: str) -> str:
+    """Fix #5B — RBR/DBD/DBR/RBD: direction of the candle immediately
+    before and after the zone candle. Uses `index` as a local loop position
+    only (not stored on the zone — candle_index stays WIP-only, not part
+    of this fix)."""
+    if index <= 0 or index >= len(candles) - 1:
+        return "RBR" if zone_type == "demand" else "DBD"
+
+    local = candles[max(0, index - 2): min(len(candles), index + 3)]
+    local_atr = compute_atr(local, period=max(2, len(local) - 1))
+    before = _direction(candles[index - 1], local_atr)
+    after = _direction(candles[index + 1], local_atr)
+
+    if before == "rally" and after == "rally":
+        return "RBR"
+    if before == "drop" and after == "drop":
+        return "DBD"
+    if before == "drop" and after == "rally":
+        return "DBR"
+    if before == "rally" and after == "drop":
+        return "RBD"
+
+    return "RBR" if zone_type == "demand" else "DBD"
+
+
 def select_active_zone(zones: List[SupplyDemandZone], current_price: float) -> Tuple[str, Optional[float]]:
     """Canonical DemandEngine context selector (Fix #4B) — the single zone-
     selection rule for this engine. Picks the active (valid) zone nearest to
     current_price; distance is 0 if current_price sits inside [bottom, top].
-    On a distance tie, the LATER zone in `zones` wins — list position only,
-    not candle_index/timestamp (WIP-only fields this canonical selector
-    deliberately does not depend on).
+    On a distance tie, the LATER zone in `zones` wins — list position only;
+    this canonical selector still doesn't depend on timestamp or the
+    WIP-only candle_index for that tie-break.
     demand level = top (proximal edge, price approaches from above);
     supply level = bottom (proximal edge, price approaches from below).
     No active zone -> ("neutral", None). Wired into StructureEngine via
@@ -96,6 +178,78 @@ def select_active_zone(zones: List[SupplyDemandZone], current_price: float) -> T
 
     level = nearest.top if nearest.type == "demand" else nearest.bottom
     return nearest.type, level
+
+
+def _swing_tolerance_seconds(timeframe: str, window: int = SWING_WINDOW) -> int:
+    """Fix #5B — deterministic timestamp tolerance for zone classification:
+    `window` candles' worth of time on `timeframe` — the same confirmation
+    window StructureEngine's find_swings() itself uses (SWING_WINDOW candles
+    on each side of a swing point), so a zone counts as "near" a swing only
+    within the same margin structure detection already tolerates.
+    Unknown/blank timeframe -> 0 (no tolerance — forces classify_zone() to
+    fall back to "unknown" rather than guessing a window)."""
+    seconds_per_candle = TIMEFRAME_SECONDS.get(timeframe.upper(), 0) if timeframe else 0
+    return seconds_per_candle * window
+
+
+def _safe_int(value) -> Optional[int]:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def classify_zone(zone: SupplyDemandZone, swing_points: List[SwingPoint], timeframe: str = "") -> str:
+    """Fix #5B — additive location-in-move label: "reversal" / "continuation"
+    / "unknown". Read-only: doesn't touch zone detection thresholds/
+    boundaries, the zone selector, strength, or Bias/Strategy/Dashboard.
+    BOS/CHoCH deliberately not used here (per Fix #5A's audit — reserved
+    for later). Matching is timestamp-based only, never raw candle index —
+    DemandEngine and StructureEngine fetch different-sized candle windows,
+    so list positions between the two aren't comparable (Fix #5A finding).
+
+    reversal: zone.timestamp falls within a timeframe/SWING_WINDOW-derived
+    tolerance (see _swing_tolerance_seconds()) of a confirmed swing high
+    (supply zone) or swing low (demand zone) in `swing_points` — any HH/LH
+    for supply, any LL/HL for demand; the sub-label (higher vs lower) isn't
+    relevant here, only "was this a confirmed turning point".
+    continuation: zone.pattern is RBR (demand) or DBD (supply) — direction
+    held on both sides of the zone candle — AND it is not near any
+    matching-direction swing point.
+    unknown: no timestamp, no swing_points, unresolvable timeframe, or
+    neither rule matches — an explicit fallback rather than a guess."""
+    if zone.type not in ("demand", "supply"):
+        return "unknown"
+
+    zone_ts = _safe_int(zone.timestamp)
+    tolerance = _swing_tolerance_seconds(timeframe)
+
+    if zone_ts is not None and tolerance > 0 and swing_points:
+        relevant_labels = {"HH", "LH"} if zone.type == "supply" else {"LL", "HL"}
+        for sp in swing_points:
+            if sp.label not in relevant_labels:
+                continue
+            sp_ts = _safe_int(sp.timestamp)
+            if sp_ts is not None and abs(sp_ts - zone_ts) <= tolerance:
+                return "reversal"
+
+    if zone.type == "demand" and zone.pattern == "RBR":
+        return "continuation"
+    if zone.type == "supply" and zone.pattern == "DBD":
+        return "continuation"
+
+    return "unknown"
+
+
+def classify_zones(zones: List[SupplyDemandZone], swing_points: List[SwingPoint], timeframe: str = "") -> List[SupplyDemandZone]:
+    """Batch convenience wrapper — sets .classification on each zone in
+    place (via classify_zone()) and returns the same list. Not called from
+    DemandEngine.get_zones()/get_context()/get_label() or from Output.py —
+    those don't have swing_points available, and wiring this into the live
+    output pipeline is a separate step, not part of Fix #5B."""
+    for zone in zones:
+        zone.classification = classify_zone(zone, swing_points, timeframe)
+    return zones
 
 
 class DemandEngine:

@@ -180,11 +180,21 @@ def _build_supply_demand_zones(symbol: str, demand_engine, cache=None, zones_map
     context already consumed above, instead of calling
     demand_engine.get_zones() (a second detect_zones() run) again here.
     zones_map omitted (any other caller) falls back to the original
-    per-tf get_zones() call, unchanged."""
+    per-tf get_zones() call, unchanged.
+
+    Fix #5B — SupplyDemandZone.classification is excluded from the
+    serialized dict here: nothing on this path ever calls
+    classify_zone()/classify_zones(), so every zone's classification is
+    just the dataclass default ("unknown") rather than a real verdict.
+    Exposing that would look like a computed answer when it isn't. Wiring
+    real classification into this output is a separate, later fix."""
     zones = {}
     for tf in BIAS_ORDER:
         tf_raw_zones = zones_map.get(tf, []) if zones_map is not None else demand_engine.get_zones(symbol, tf, cache=cache)
-        tf_zones = [asdict(z) for z in tf_raw_zones if z.valid]
+        tf_zones = [
+            {k: v for k, v in asdict(z).items() if k != "classification"}
+            for z in tf_raw_zones if z.valid
+        ]
         if tf_zones:
             zones[tf] = tf_zones
     return zones
