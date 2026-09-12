@@ -169,6 +169,13 @@ def _build_structure_extras(structure_map: dict) -> tuple:
             "broken_level": s.event_broken_level,
             "event_index": s.event_index,
             "event_timestamp": s.event_timestamp,
+            # Fix #5F2 — structural leg origin evidence (additive; not a
+            # zone reference, not a history — a single companion reference
+            # for this same event).
+            "leg_origin_index": s.leg_origin_index,
+            "leg_origin_timestamp": s.leg_origin_timestamp,
+            "leg_origin_price": s.leg_origin_price,
+            "leg_origin_swing_label": s.leg_origin_swing_label,
         }
         for tf, s in structure_map.items()
         if s.structure_valid

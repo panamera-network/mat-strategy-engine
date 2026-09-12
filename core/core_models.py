@@ -204,6 +204,15 @@ class StructureSnapshot:
     event_broken_level: float | None = None
     event_index: int | None = None
     event_timestamp: str | None = None
+    # Fix #5F2 — structural leg origin evidence: the latest confirmed
+    # OPPOSING swing (the one NOT broken) that the leg producing this
+    # BOS/CHoCH started from. Additive only — not a demand/supply zone
+    # origin, not a displacement-candle detector, no history (single
+    # current event only). None when there's no confirmed event.
+    leg_origin_index: int | None = None
+    leg_origin_timestamp: str | None = None
+    leg_origin_price: float | None = None
+    leg_origin_swing_label: str | None = None
 
     def __post_init__(self):
         self.structure_type = self.detect_structure_label()

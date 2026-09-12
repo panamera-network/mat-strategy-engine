@@ -105,6 +105,13 @@ class StructureEngine:
             event_broken_level=structure_event.get("broken_level"),
             event_index=event_index,
             event_timestamp=event_timestamp,
+            # Fix #5F2 — structural leg origin evidence. detect_structure_event()
+            # already guarantees these are None exactly when there's no
+            # confirmed event, same as broken_level — no extra guard needed here.
+            leg_origin_index=structure_event.get("leg_origin_index"),
+            leg_origin_timestamp=structure_event.get("leg_origin_timestamp"),
+            leg_origin_price=structure_event.get("leg_origin_price"),
+            leg_origin_swing_label=structure_event.get("leg_origin_swing_label"),
         )
 
         snapshot.structure_type = structure_event["type"]

@@ -52,6 +52,20 @@ def detect_trend(candles: List[CandleSnapshot], swing_highs: List[int], swing_lo
     return "Neutral"
 
 
+def _last_swing_label(candles: List[CandleSnapshot], swing_indices: List[int], is_high: bool) -> str:
+    """Fix #5F2 — labels the LAST entry of a swing index list, reusing the
+    exact same adjacent-swing comparison label_swing_points() already
+    applies to every swing point (and detect_trend() already applies to
+    the same [-1] vs [-2] pair internally) — no new rule, no new formula."""
+    latest = candles[swing_indices[-1]]
+    if len(swing_indices) < 2:
+        return "LH" if is_high else "HL"
+    previous = candles[swing_indices[-2]]
+    if is_high:
+        return "HH" if latest.high > previous.high else "LH"
+    return "LL" if latest.low < previous.low else "HL"
+
+
 def detect_structure_event(candles: List[CandleSnapshot], swing_highs: List[int], swing_lows: List[int]) -> Dict:
     """BOS = break in the direction of the existing trend (continuation).
     CHoCH = break against the existing trend (trend flip).
@@ -59,9 +73,23 @@ def detect_structure_event(candles: List[CandleSnapshot], swing_highs: List[int]
     `broken_level` (Fix #2) is the actual swing high/low price that was
     breached — last_swing_high/last_swing_low below were already computed
     for the comparisons, just exposed on the return value now, not a new
-    calculation and not a formula change."""
+    calculation and not a formula change.
+
+    Fix #5F2 — leg_origin_* (additive, no detection-formula change): the
+    latest confirmed OPPOSING swing — the one NOT broken — which was
+    already being computed as last_swing_low/last_swing_high below purely
+    for the break comparison itself. This is the structural leg's origin
+    (the swing the leg that produced this break started from) — not a
+    demand/supply zone origin (a different engine, a different, unrelated
+    concept) and not a displacement-candle detector (a possible future,
+    more expensive refinement, not this one). None when there's no
+    confirmed event."""
+    no_event = {
+        "type": "None", "direction": "Neutral", "valid": False, "index": len(candles) - 1, "broken_level": None,
+        "leg_origin_index": None, "leg_origin_timestamp": None, "leg_origin_price": None, "leg_origin_swing_label": None,
+    }
     if not swing_highs or not swing_lows:
-        return {"type": "None", "direction": "Neutral", "valid": False, "index": len(candles) - 1, "broken_level": None}
+        return no_event
 
     last_swing_high = candles[swing_highs[-1]].high
     last_swing_low = candles[swing_lows[-1]].low
@@ -71,13 +99,27 @@ def detect_structure_event(candles: List[CandleSnapshot], swing_highs: List[int]
 
     if curr.close > last_swing_high:
         event_type = "CHOCH" if trend == "Bearish" else "BOS"
-        return {"type": event_type, "direction": "Bullish", "valid": True, "index": break_index, "broken_level": last_swing_high}
+        origin_index = swing_lows[-1]
+        return {
+            "type": event_type, "direction": "Bullish", "valid": True, "index": break_index, "broken_level": last_swing_high,
+            "leg_origin_index": origin_index,
+            "leg_origin_timestamp": str(candles[origin_index].timestamp),
+            "leg_origin_price": last_swing_low,
+            "leg_origin_swing_label": _last_swing_label(candles, swing_lows, is_high=False),
+        }
 
     if curr.close < last_swing_low:
         event_type = "CHOCH" if trend == "Bullish" else "BOS"
-        return {"type": event_type, "direction": "Bearish", "valid": True, "index": break_index, "broken_level": last_swing_low}
+        origin_index = swing_highs[-1]
+        return {
+            "type": event_type, "direction": "Bearish", "valid": True, "index": break_index, "broken_level": last_swing_low,
+            "leg_origin_index": origin_index,
+            "leg_origin_timestamp": str(candles[origin_index].timestamp),
+            "leg_origin_price": last_swing_high,
+            "leg_origin_swing_label": _last_swing_label(candles, swing_highs, is_high=True),
+        }
 
-    return {"type": "None", "direction": "Neutral", "valid": False, "index": break_index, "broken_level": None}
+    return no_event
 
 
 def label_swing_points(
