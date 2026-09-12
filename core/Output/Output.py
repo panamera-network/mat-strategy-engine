@@ -200,7 +200,7 @@ def _build_symbol_snapshot(
 
     # --- Scalping ---
     scalping_map = {
-        tf: get_style_snapshot(symbol, tf, "scalping", bias_engine, momentum_engine, demand_engine, structure_engine, shift_engine, cache=cache)
+        tf: get_style_snapshot(symbol, tf, "scalping", bias_engine, momentum_engine, demand_engine, structure_engine, shift_engine, cache=cache, structure_snapshot=structure_map.get(tf))
         for tf in SCALPING_ORDER
     }
     scalping_alignment = compute_alignment_signal(scalping_map, mode="scalping")
@@ -213,7 +213,7 @@ def _build_symbol_snapshot(
 
     # --- Swing ---
     swing_map_raw = {
-        tf: get_style_snapshot(symbol, tf, "swing", bias_engine, momentum_engine, demand_engine, structure_engine, shift_engine, cache=cache)
+        tf: get_style_snapshot(symbol, tf, "swing", bias_engine, momentum_engine, demand_engine, structure_engine, shift_engine, cache=cache, structure_snapshot=structure_map.get(tf))
         for tf in SWING_ORDER
     }
     swing_alignment = compute_alignment_signal(swing_map_raw, mode="swing")

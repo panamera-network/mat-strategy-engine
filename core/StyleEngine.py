@@ -10,8 +10,13 @@ from datetime import datetime, timezone
 def get_style_snapshot(symbol, tf, mode,
                        bias_engine, momentum_engine,
                        demand_engine, structure_engine, shift_engine,
-                       candle_engine=None, cache=None) -> StyleSnapshot:
-    structure = structure_engine.get_snapshot(symbol, tf, cache=cache)
+                       candle_engine=None, cache=None, structure_snapshot=None) -> StyleSnapshot:
+    # Fix #4D2 — reuse a caller-supplied StructureSnapshot (e.g. Output.py's
+    # structure_map[tf], already fetched once) instead of calling
+    # StructureEngine.get_snapshot() a second time. Optional and defaults to
+    # None so callers that don't pass one (e.g. build_multi_symbol_snapshot())
+    # keep fetching it here, unchanged.
+    structure = structure_snapshot if structure_snapshot is not None else structure_engine.get_snapshot(symbol, tf, cache=cache)
     # Reuse the structure snapshot just fetched above so bias's BOS/CHoCH
     # always matches StructureEngine's — see BiasEngine.evaluate_bias().
     bias = bias_engine.get_bias(symbol, tf, structure_snapshot=structure, cache=cache)
