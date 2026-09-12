@@ -20,7 +20,7 @@ class FakeDemandEngine:
         self.level = level
         self.calls = []
 
-    def get_context(self, symbol, tf, count=50, cache=None):
+    def get_context(self, symbol, tf, count=50, cache=None, zones=None):
         self.calls.append((symbol, tf, cache))
         return self.zone_type, self.level
 

@@ -153,9 +153,9 @@ def test_live_structure_engine_call_count_reduced_per_tf():
     call_counts = {}
     original_get_snapshot = cr.structure_engine.get_snapshot
 
-    def counting_get_snapshot(sym, tf, cache=None):
+    def counting_get_snapshot(sym, tf, cache=None, zones=None):
         call_counts[(sym, tf)] = call_counts.get((sym, tf), 0) + 1
-        return original_get_snapshot(sym, tf, cache=cache)
+        return original_get_snapshot(sym, tf, cache=cache, zones=zones)
 
     cr.structure_engine.get_snapshot = counting_get_snapshot
     try:

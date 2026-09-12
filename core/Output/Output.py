@@ -113,13 +113,19 @@ def _compute_signal_confidence(bias_ordered: dict, scalping_snapshots: dict, sca
     return bias_conf, momentum_conf, align_conf
 
 
-def _build_structure_context(symbol: str, structure_engine, cache=None) -> dict:
+def _build_structure_context(symbol: str, structure_engine, cache=None, zones_map: dict = None) -> dict:
     """Fetch one raw StructureSnapshot per timeframe — single source for
     strategy evaluation, SNR levels, order blocks, and FVGs below, so we
-    don't re-fetch structure data per feature."""
+    don't re-fetch structure data per feature.
+
+    Fix #4D3 — optional zones_map (request-scoped, built once in
+    _build_symbol_snapshot()) is forwarded per-tf so StructureEngine's
+    DemandEngine.get_context() call reuses it instead of recomputing
+    detect_zones(). None (any other caller) behaves exactly as before."""
     structure_map = {}
     for tf in BIAS_ORDER:
-        structure = structure_engine.get_snapshot(symbol, tf, cache=cache)
+        zones = zones_map.get(tf) if zones_map else None
+        structure = structure_engine.get_snapshot(symbol, tf, cache=cache, zones=zones)
         if structure:
             structure_map[tf] = structure
     return structure_map
@@ -169,10 +175,16 @@ def _build_structure_extras(structure_map: dict) -> tuple:
     return snr_levels, order_blocks, fvg, swing_points, structure_events
 
 
-def _build_supply_demand_zones(symbol: str, demand_engine, cache=None) -> dict:
+def _build_supply_demand_zones(symbol: str, demand_engine, cache=None, zones_map: dict = None) -> dict:
+    """Fix #4D3 — reuses the same request-scoped zones_map StructureEngine's
+    context already consumed above, instead of calling
+    demand_engine.get_zones() (a second detect_zones() run) again here.
+    zones_map omitted (any other caller) falls back to the original
+    per-tf get_zones() call, unchanged."""
     zones = {}
     for tf in BIAS_ORDER:
-        tf_zones = [asdict(z) for z in demand_engine.get_zones(symbol, tf, cache=cache) if z.valid]
+        tf_raw_zones = zones_map.get(tf, []) if zones_map is not None else demand_engine.get_zones(symbol, tf, cache=cache)
+        tf_zones = [asdict(z) for z in tf_raw_zones if z.valid]
         if tf_zones:
             zones[tf] = tf_zones
     return zones
@@ -189,11 +201,19 @@ def _build_symbol_snapshot(
     shift_engine,
     cache=None,
 ) -> dict:
+    # Fix #4D3 — one raw zone list per timeframe, request-scoped to this
+    # symbol's build only (not a global/persistent cache — discarded when
+    # this function returns). Built once here via get_zones() (the single
+    # detect_zones() call per tf) and reused below by StructureEngine's
+    # DemandEngine.get_context() call and by _build_supply_demand_zones(),
+    # instead of each recomputing it independently.
+    zones_map = {tf: demand_engine.get_zones(symbol, tf, cache=cache) for tf in BIAS_ORDER}
+
     # Fetched before bias_map so BiasEngine can consume the same BOS/CHoCH
     # result instead of detecting structure independently (single source of
     # truth — see BiasEngine.evaluate_bias()). Also reused below for SNR
     # levels, order blocks, FVGs, and strategy evaluation — one fetch either way.
-    structure_map = _build_structure_context(symbol, structure_engine, cache=cache)
+    structure_map = _build_structure_context(symbol, structure_engine, cache=cache, zones_map=zones_map)
 
     bias_map = bias_engine.get_bias_map(symbol, TIMEFRAMES, structure_map=structure_map, cache=cache)
     prev_bias_map = prev_snapshot.get("bias")
@@ -257,7 +277,7 @@ def _build_symbol_snapshot(
     display_block["fvg"] = fvg
     display_block["swing_points"] = swing_points
     display_block["structure_events"] = structure_events
-    display_block["supply_demand_zones"] = _build_supply_demand_zones(symbol, demand_engine, cache=cache)
+    display_block["supply_demand_zones"] = _build_supply_demand_zones(symbol, demand_engine, cache=cache, zones_map=zones_map)
 
     # Cache for next pass (deltas, history, etc.)
     snapshot_cache.set(symbol, {

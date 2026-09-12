@@ -39,7 +39,7 @@ class StructureEngine:
         # degrades to ("neutral", None) rather than detecting independently.
         self.demand_engine = demand_engine
 
-    def get_snapshot(self, symbol: str, tf: str, cache=None) -> Optional[StructureSnapshot]:
+    def get_snapshot(self, symbol: str, tf: str, cache=None, zones=None) -> Optional[StructureSnapshot]:
         candles = self.candle_engine.get_snapshots(symbol, tf, count=FETCH_COUNT, cache=cache)
         if len(candles) < SWING_WINDOW * 2 + 1:
             return None
@@ -75,8 +75,12 @@ class StructureEngine:
         # Fix #4C — canonical context_zone/context_level, via DemandEngine's
         # get_context() (same call, same cache, no separate computation of
         # our own). detect_snd() is legacy and no longer called from here.
+        # Fix #4D3 — optional `zones` (a caller-precomputed zone list, e.g.
+        # Output.py's request-scoped zones_map[tf]) is passed straight
+        # through so get_context() can skip its own detect_zones() call.
+        # None (every caller besides Output.py) behaves exactly as before.
         if self.demand_engine is not None:
-            context_zone, context_level = self.demand_engine.get_context(symbol, tf, cache=cache)
+            context_zone, context_level = self.demand_engine.get_context(symbol, tf, cache=cache, zones=zones)
         else:
             context_zone, context_level = "neutral", None
 

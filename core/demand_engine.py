@@ -105,14 +105,20 @@ class DemandEngine:
         candles = self.candle_engine.get_snapshots(symbol, tf, count=count, cache=cache)
         return detect_zones(candles)
 
-    def get_context(self, symbol: str, tf: str, count: int = 50, cache=None) -> Tuple[str, Optional[float]]:
+    def get_context(self, symbol: str, tf: str, count: int = 50, cache=None, zones: Optional[List[SupplyDemandZone]] = None) -> Tuple[str, Optional[float]]:
         """Canonical context_zone/context_level for a symbol/timeframe —
         see select_active_zone(). get_label() below reuses this so
-        DemandEngine has exactly one zone-selection rule, not two."""
+        DemandEngine has exactly one zone-selection rule, not two.
+
+        Fix #4D3 — optional `zones`: pass an already-computed zone list
+        (e.g. from get_zones()) to skip detect_zones() here and reuse it
+        instead. Omitted/None (every existing caller) behaves exactly as
+        before — detect_zones() runs here same as always."""
         candles = self.candle_engine.get_snapshots(symbol, tf, count=count, cache=cache)
         if not candles:
             return "neutral", None
-        zones = detect_zones(candles)
+        if zones is None:
+            zones = detect_zones(candles)
         return select_active_zone(zones, candles[-1].close)
 
     def get_label(self, symbol: str, tf: str, cache=None) -> str:
