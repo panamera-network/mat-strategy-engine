@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional, Tuple
 
 from core.CandleEngine import CandleEngine
 from core.core_models import CandleSnapshot
@@ -63,6 +63,40 @@ def detect_zones(candles: List[CandleSnapshot]) -> List[SupplyDemandZone]:
     return zones
 
 
+def select_active_zone(zones: List[SupplyDemandZone], current_price: float) -> Tuple[str, Optional[float]]:
+    """Canonical DemandEngine context selector (Fix #4B) — the single zone-
+    selection rule for this engine. Picks the active (valid) zone nearest to
+    current_price; distance is 0 if current_price sits inside [bottom, top].
+    On a distance tie, the LATER zone in `zones` wins — list position only,
+    not candle_index/timestamp (WIP-only fields this canonical selector
+    deliberately does not depend on).
+    demand level = top (proximal edge, price approaches from above);
+    supply level = bottom (proximal edge, price approaches from below).
+    No active zone -> ("neutral", None). Not wired into StructureEngine/
+    detect_snd() yet — see Fix #4 audit."""
+    active = [z for z in zones if z.valid]
+    if not active:
+        return "neutral", None
+
+    def distance(zone: SupplyDemandZone) -> float:
+        if zone.bottom <= current_price <= zone.top:
+            return 0.0
+        if current_price < zone.bottom:
+            return zone.bottom - current_price
+        return current_price - zone.top
+
+    nearest = active[0]
+    nearest_distance = distance(nearest)
+    for zone in active[1:]:
+        d = distance(zone)
+        if d <= nearest_distance:  # <=, not < — later zone wins on a tie
+            nearest = zone
+            nearest_distance = d
+
+    level = nearest.top if nearest.type == "demand" else nearest.bottom
+    return nearest.type, level
+
+
 class DemandEngine:
     def __init__(self, candle_engine: CandleEngine):
         self.candle_engine = candle_engine
@@ -71,9 +105,16 @@ class DemandEngine:
         candles = self.candle_engine.get_snapshots(symbol, tf, count=count, cache=cache)
         return detect_zones(candles)
 
+    def get_context(self, symbol: str, tf: str, count: int = 50, cache=None) -> Tuple[str, Optional[float]]:
+        """Canonical context_zone/context_level for a symbol/timeframe —
+        see select_active_zone(). get_label() below reuses this so
+        DemandEngine has exactly one zone-selection rule, not two."""
+        candles = self.candle_engine.get_snapshots(symbol, tf, count=count, cache=cache)
+        if not candles:
+            return "neutral", None
+        zones = detect_zones(candles)
+        return select_active_zone(zones, candles[-1].close)
+
     def get_label(self, symbol: str, tf: str, cache=None) -> str:
-        zones = self.get_zones(symbol, tf, cache=cache)
-        active = [z for z in zones if z.valid]
-        if not active:
-            return "neutral"
-        return active[-1].type
+        zone_type, _ = self.get_context(symbol, tf, cache=cache)
+        return zone_type
