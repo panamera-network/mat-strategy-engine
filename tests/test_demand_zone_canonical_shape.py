@@ -4,8 +4,14 @@
    candle_index are NOT part of this fix (still WIP-only elsewhere, owned
    by a separate, unrelated piece of pre-existing work).
 2. detect_zones() computes real pattern/timestamp values (not placeholders).
-3. Output._build_supply_demand_zones() never leaks classification into the
-   live JSON, since nothing on that path actually classifies zones yet.
+3. Output._build_supply_demand_zones() serializes classification as-is —
+   a plain passthrough. Fix #5B originally excluded this key here because
+   nothing called classify_zone()/classify_zones() on the live path yet;
+   Fix #5C wired that classification into _build_symbol_snapshot() (right
+   after structure_map is built), so by the time _build_supply_demand_zones()
+   runs, zones_map's zones already carry a real verdict — the exclusion
+   was removed and these tests updated accordingly (see
+   test_zone_classification_wiring.py for the Fix #5C wiring itself).
 
 Note on tests 1 (exact-exclusion): the working tree may have unrelated
 pre-existing WIP (status/touches/candle_index) sitting in the same file,
@@ -77,9 +83,10 @@ def test_detect_zones_computes_real_pattern_and_timestamp():
     assert zone.classification == "unknown"  # default, not yet classified
 
 
-# ── Output._build_supply_demand_zones() must not leak classification ────
+# ── Output._build_supply_demand_zones() serializes classification as-is ──
+# (Fix #5C superseded Fix #5B's exclusion — see module docstring above.)
 
-def test_build_supply_demand_zones_excludes_classification_key():
+def test_build_supply_demand_zones_includes_whatever_classification_the_zone_has():
     from core.Output.Output import _build_supply_demand_zones
 
     class FakeDemandEngine:
@@ -90,19 +97,18 @@ def test_build_supply_demand_zones_excludes_classification_key():
     assert result, "expected at least one timeframe with zones"
     for tf_zones in result.values():
         for zone_dict in tf_zones:
-            assert "classification" not in zone_dict, (
-                "classification must not appear in live output — nothing on this "
-                "path calls classify_zone()/classify_zones(), so it would just be "
-                "the unfired 'unknown' default, not a real verdict"
-            )
-            # Everything else should still be present.
+            # Never classified here (no zones_map / classify_zones() call in
+            # this test) -> honestly reports the unfired default, but the
+            # key itself is present — _build_supply_demand_zones() no
+            # longer strips it (Fix #5C).
+            assert zone_dict.get("classification") == "unknown"
             assert "type" in zone_dict and "timestamp" in zone_dict and "pattern" in zone_dict
 
 
-def test_build_supply_demand_zones_reuses_zones_map_and_still_excludes_classification():
+def test_build_supply_demand_zones_reuses_zones_map_and_reflects_real_classification():
     from core.Output.Output import _build_supply_demand_zones
 
-    zone = SupplyDemandZone(type="supply", top=105.0, bottom=104.0, valid=True, timestamp="2000")
+    zone = SupplyDemandZone(type="supply", top=105.0, bottom=104.0, valid=True, timestamp="2000", classification="reversal")
     zones_map = {"M15": [zone]}
 
     class ExplodingDemandEngine:
@@ -111,7 +117,7 @@ def test_build_supply_demand_zones_reuses_zones_map_and_still_excludes_classific
 
     result = _build_supply_demand_zones("TEST", ExplodingDemandEngine(), zones_map=zones_map)
     assert "M15" in result
-    assert "classification" not in result["M15"][0]
+    assert result["M15"][0]["classification"] == "reversal"
 
 
 if __name__ == "__main__":
@@ -127,11 +133,11 @@ if __name__ == "__main__":
     test_detect_zones_computes_real_pattern_and_timestamp()
     print("[PASS] detect_zones() computes real pattern/timestamp")
 
-    test_build_supply_demand_zones_excludes_classification_key()
-    print("[PASS] Output._build_supply_demand_zones() excludes classification")
+    test_build_supply_demand_zones_includes_whatever_classification_the_zone_has()
+    print("[PASS] Output._build_supply_demand_zones() serializes classification as-is")
 
-    test_build_supply_demand_zones_reuses_zones_map_and_still_excludes_classification()
-    print("[PASS] zones_map reuse path also excludes classification")
+    test_build_supply_demand_zones_reuses_zones_map_and_reflects_real_classification()
+    print("[PASS] zones_map reuse path reflects real classification")
 
     test_build_supply_demand_zones_reuses_zones_map_and_still_excludes_classification()
     print("[PASS] zones_map reuse path also excludes classification")

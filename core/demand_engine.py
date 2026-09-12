@@ -199,14 +199,25 @@ def _safe_int(value) -> Optional[int]:
         return None
 
 
+def _structure_coverage_range(swing_points: List[SwingPoint]) -> Optional[Tuple[int, int]]:
+    """Fix #5C correction — the (earliest, latest) timestamp that structure
+    evidence (swing_points) actually spans. None when there's no resolvable
+    evidence at all (empty swing_points, or none have a parsable timestamp).
+    A zone outside this range — padded by the same tolerance margin used
+    for reversal matching — has no real structure evidence backing a "not
+    near a swing" conclusion; that's an absence of evidence, not evidence
+    of absence, so classify_zone() below must not call it continuation."""
+    timestamps = [ts for sp in swing_points if (ts := _safe_int(sp.timestamp)) is not None]
+    if not timestamps:
+        return None
+    return min(timestamps), max(timestamps)
+
+
 def classify_zone(zone: SupplyDemandZone, swing_points: List[SwingPoint], timeframe: str = "") -> str:
-    """Fix #5B — additive location-in-move label: "reversal" / "continuation"
-    / "unknown". Read-only: doesn't touch zone detection thresholds/
-    boundaries, the zone selector, strength, or Bias/Strategy/Dashboard.
-    BOS/CHoCH deliberately not used here (per Fix #5A's audit — reserved
-    for later). Matching is timestamp-based only, never raw candle index —
-    DemandEngine and StructureEngine fetch different-sized candle windows,
-    so list positions between the two aren't comparable (Fix #5A finding).
+    """Fix #5B, corrected — additive location-in-move label: "reversal" /
+    "continuation" / "unknown". Read-only: doesn't touch zone detection, the
+    zone selector, strength, or Bias/Strategy/Dashboard. BOS/CHoCH
+    deliberately not used here (per Fix #5A's audit — reserved for later).
 
     reversal: zone.timestamp falls within a timeframe/SWING_WINDOW-derived
     tolerance (see _swing_tolerance_seconds()) of a confirmed swing high
@@ -214,10 +225,16 @@ def classify_zone(zone: SupplyDemandZone, swing_points: List[SwingPoint], timefr
     for supply, any LL/HL for demand; the sub-label (higher vs lower) isn't
     relevant here, only "was this a confirmed turning point".
     continuation: zone.pattern is RBR (demand) or DBD (supply) — direction
-    held on both sides of the zone candle — AND it is not near any
-    matching-direction swing point.
-    unknown: no timestamp, no swing_points, unresolvable timeframe, or
-    neither rule matches — an explicit fallback rather than a guess."""
+    held on both sides of the zone candle (Fix #5A) — AND zone.timestamp
+    falls within the structure evidence's actual coverage window (see
+    _structure_coverage_range(), correction) — AND it is not near any
+    matching-direction swing point. A zone whose timestamp predates or
+    postdates everything structure evidence examined can never be
+    "continuation", no matter its pattern — there's no evidence it isn't
+    sitting right next to an unconfirmed swing outside that window.
+    unknown: no timestamp, no swing_points, unresolvable timeframe, zone
+    timestamp outside structure coverage, or neither rule matches — an
+    explicit fallback rather than a guess."""
     if zone.type not in ("demand", "supply"):
         return "unknown"
 
@@ -233,10 +250,18 @@ def classify_zone(zone: SupplyDemandZone, swing_points: List[SwingPoint], timefr
             if sp_ts is not None and abs(sp_ts - zone_ts) <= tolerance:
                 return "reversal"
 
-    if zone.type == "demand" and zone.pattern == "RBR":
-        return "continuation"
-    if zone.type == "supply" and zone.pattern == "DBD":
-        return "continuation"
+    coverage = _structure_coverage_range(swing_points)
+    within_coverage = (
+        zone_ts is not None
+        and coverage is not None
+        and (coverage[0] - tolerance) <= zone_ts <= (coverage[1] + tolerance)
+    )
+
+    if within_coverage:
+        if zone.type == "demand" and zone.pattern == "RBR":
+            return "continuation"
+        if zone.type == "supply" and zone.pattern == "DBD":
+            return "continuation"
 
     return "unknown"
 

@@ -9,6 +9,7 @@ from core.Output.diagnostic_models import cfg, BIAS_ORDER, SCALPING_ORDER, SWING
 from core.Output.health_log import build_symbol_health
 from core.Output.helper import add_display_percentages, confidence_color, strip_nulls
 from core.Output.swing_diag import enrich_swing_with_diagnostic
+from core.demand_engine import classify_zones
 from core.SnapshotCache import snapshot_cache
 from core.StyleEngine import get_style_snapshot
 from core.core_models import StrengthDiagnostic
@@ -182,19 +183,18 @@ def _build_supply_demand_zones(symbol: str, demand_engine, cache=None, zones_map
     zones_map omitted (any other caller) falls back to the original
     per-tf get_zones() call, unchanged.
 
-    Fix #5B — SupplyDemandZone.classification is excluded from the
-    serialized dict here: nothing on this path ever calls
-    classify_zone()/classify_zones(), so every zone's classification is
-    just the dataclass default ("unknown") rather than a real verdict.
-    Exposing that would look like a computed answer when it isn't. Wiring
-    real classification into this output is a separate, later fix."""
+    Fix #5C — classification is included in the serialized dict now:
+    _build_symbol_snapshot() classifies zones_map's zones in place (via
+    classify_zones(), using structure_map's swing_points) before this
+    function ever runs, so every zone's classification here is a real
+    verdict, not the unfired "unknown" default Fix #5B excluded this
+    field for. A caller that supplies zones_map without classifying it
+    first (or omits zones_map entirely) still gets a valid dict — the
+    classification would just honestly read "unknown"."""
     zones = {}
     for tf in BIAS_ORDER:
         tf_raw_zones = zones_map.get(tf, []) if zones_map is not None else demand_engine.get_zones(symbol, tf, cache=cache)
-        tf_zones = [
-            {k: v for k, v in asdict(z).items() if k != "classification"}
-            for z in tf_raw_zones if z.valid
-        ]
+        tf_zones = [asdict(z) for z in tf_raw_zones if z.valid]
         if tf_zones:
             zones[tf] = tf_zones
     return zones
@@ -224,6 +224,16 @@ def _build_symbol_snapshot(
     # truth — see BiasEngine.evaluate_bias()). Also reused below for SNR
     # levels, order blocks, FVGs, and strategy evaluation — one fetch either way.
     structure_map = _build_structure_context(symbol, structure_engine, cache=cache, zones_map=zones_map)
+
+    # Fix #5C — classify each tf's zones now that structure_map (with
+    # swing_points) is available for the same tf. Reuses zones_map's
+    # already-fetched zones and structure_map's already-computed
+    # swing_points in place — no new detect_zones() or get_snapshot()
+    # calls, no change to zone detection/selector. BOS/CHoCH not used
+    # (per Fix #5A/#5B).
+    for tf in BIAS_ORDER:
+        structure = structure_map.get(tf)
+        classify_zones(zones_map.get(tf, []), structure.swing_points if structure else [], timeframe=tf)
 
     bias_map = bias_engine.get_bias_map(symbol, TIMEFRAMES, structure_map=structure_map, cache=cache)
     prev_bias_map = prev_snapshot.get("bias")
