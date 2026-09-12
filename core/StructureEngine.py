@@ -33,10 +33,10 @@ class StructureEngine:
         self.candle_engine = candle_engine
         # Optional — injected by the composition root (api/core_router.py).
         # context_zone/context_level now come exclusively from DemandEngine's
-        # canonical get_context() (Fix #4C); StructureEngine no longer calls
-        # detect_snd() itself. detect_snd() is left in structure_utils.py as
-        # legacy, not deleted. If no demand_engine is injected, context
-        # degrades to ("neutral", None) rather than detecting independently.
+        # canonical get_context() (Fix #4C). The old 2-candle detect_snd()
+        # heuristic this used to call has since been removed entirely
+        # (Fix #4E1). If no demand_engine is injected, context degrades to
+        # ("neutral", None) rather than detecting independently.
         self.demand_engine = demand_engine
 
     def get_snapshot(self, symbol: str, tf: str, cache=None, zones=None) -> Optional[StructureSnapshot]:
@@ -74,7 +74,8 @@ class StructureEngine:
 
         # Fix #4C — canonical context_zone/context_level, via DemandEngine's
         # get_context() (same call, same cache, no separate computation of
-        # our own). detect_snd() is legacy and no longer called from here.
+        # our own). The old detect_snd() heuristic this replaced has been
+        # removed entirely (Fix #4E1), not just unused.
         # Fix #4D3 — optional `zones` (a caller-precomputed zone list, e.g.
         # Output.py's request-scoped zones_map[tf]) is passed straight
         # through so get_context() can skip its own detect_zones() call.

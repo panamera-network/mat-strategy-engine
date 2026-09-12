@@ -135,18 +135,3 @@ def derive_snr_levels(candles: List[CandleSnapshot], swing_highs: List[int], swi
         flip_target.source = "CHOCH_flip"
 
     return levels
-
-
-def detect_snd(prev: CandleSnapshot, curr: CandleSnapshot) -> Dict:
-    """Supply/demand zone tagging — kept simple for context_zone/context_level.
-    See core/demand_engine.py for the ATR-based supply/demand engine."""
-    range_prev = prev.high - prev.low
-    range_curr = curr.high - curr.low
-
-    if range_prev < range_curr * 0.5:
-        if curr.close > curr.open and curr.low > prev.low:
-            return {"type": "demand", "level": prev.low}
-        elif curr.close < curr.open and curr.high < prev.high:
-            return {"type": "supply", "level": prev.high}
-
-    return {"type": "neutral", "level": None}

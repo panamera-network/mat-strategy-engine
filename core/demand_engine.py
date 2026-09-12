@@ -72,8 +72,9 @@ def select_active_zone(zones: List[SupplyDemandZone], current_price: float) -> T
     deliberately does not depend on).
     demand level = top (proximal edge, price approaches from above);
     supply level = bottom (proximal edge, price approaches from below).
-    No active zone -> ("neutral", None). Not wired into StructureEngine/
-    detect_snd() yet — see Fix #4 audit."""
+    No active zone -> ("neutral", None). Wired into StructureEngine via
+    get_context() (Fix #4C/#4D3) — the legacy detect_snd() heuristic in
+    structure_utils.py has since been removed (Fix #4E1)."""
     active = [z for z in zones if z.valid]
     if not active:
         return "neutral", None

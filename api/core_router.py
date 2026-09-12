@@ -28,8 +28,8 @@ strength_engine = StrengthEngine()
 demand_engine = DemandEngine(candle_engine)
 # demand_engine injected so StructureEngine resolves context_zone/context_level
 # through the same canonical DemandEngine.get_context() every other caller
-# uses, instead of detecting SND independently (detect_snd() is legacy now —
-# still in structure_utils.py, just no longer called — see Fix #4/#4C).
+# uses, instead of detecting SND independently (the old detect_snd()
+# heuristic this replaced has been removed entirely — see Fix #4C/#4E1).
 structure_engine = StructureEngine(candle_engine, demand_engine=demand_engine)
 # structure_engine injected so BiasEngine resolves BOS/CHoCH through the same
 # StructureEngine.get_snapshot() every other caller uses, even when a caller

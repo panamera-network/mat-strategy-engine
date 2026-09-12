@@ -1,6 +1,6 @@
-# CLAUDE.md — mat-strategy-engine
+# AGENTS.md — mat-strategy-engine
 
-This file gives Claude (and future-you) context on this repo before making changes.
+This file gives Codex (and future-you) context on this repo before making changes.
 
 ## Project Overview
 
@@ -314,7 +314,7 @@ file reflecting only current/outstanding state.
 1. Rebuild `/tests` from scratch against current module paths — current
    tests don't run at all.
 
-## Conventions / Notes for Claude
+## Conventions / Notes for Codex
 
 - When fixing bugs above, fix one at a time with a focused diff — don't bundle
   unrelated cleanup into the same change.
