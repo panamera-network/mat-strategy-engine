@@ -33,7 +33,11 @@ class SupplyDemandZone:
     top: float
     bottom: float
     valid: bool = True
-    strength: float = 0.0
+    # Fix #5D1 — renamed from "strength": this is the originating candle's
+    # body-to-ATR ratio (impulse size), not a zone-quality/conviction
+    # score — nothing (selector, classification, strategy) reads it as
+    # such, and it must not be treated as one. Formula unchanged.
+    impulse_strength: float = 0.0
     mitigated: bool = False
     # Fix #5B — pattern/timestamp adopted as canonical (minimum needed for
     # classification below); status/touches/candle_index deliberately left
@@ -82,7 +86,7 @@ def detect_zones(candles: List[CandleSnapshot]) -> List[SupplyDemandZone]:
                 type="demand",
                 top=c.open,
                 bottom=c.low,
-                strength=round(body / atr, 2),
+                impulse_strength=round(body / atr, 2),
                 pattern=_zone_pattern(candles, i, "demand"),
                 timestamp=str(c.timestamp),
             )
@@ -91,7 +95,7 @@ def detect_zones(candles: List[CandleSnapshot]) -> List[SupplyDemandZone]:
                 type="supply",
                 top=c.high,
                 bottom=c.open,
-                strength=round(body / atr, 2),
+                impulse_strength=round(body / atr, 2),
                 pattern=_zone_pattern(candles, i, "supply"),
                 timestamp=str(c.timestamp),
             )
@@ -216,7 +220,7 @@ def _structure_coverage_range(swing_points: List[SwingPoint]) -> Optional[Tuple[
 def classify_zone(zone: SupplyDemandZone, swing_points: List[SwingPoint], timeframe: str = "") -> str:
     """Fix #5B, corrected — additive location-in-move label: "reversal" /
     "continuation" / "unknown". Read-only: doesn't touch zone detection, the
-    zone selector, strength, or Bias/Strategy/Dashboard. BOS/CHoCH
+    zone selector, impulse_strength, or Bias/Strategy/Dashboard. BOS/CHoCH
     deliberately not used here (per Fix #5A's audit — reserved for later).
 
     reversal: zone.timestamp falls within a timeframe/SWING_WINDOW-derived

@@ -1,8 +1,11 @@
 """Fix #5B (canonical) — targeted tests proving:
 1. SupplyDemandZone's canonical field set includes type/top/bottom/valid/
-   strength/mitigated/pattern/timestamp/classification — status/touches/
-   candle_index are NOT part of this fix (still WIP-only elsewhere, owned
-   by a separate, unrelated piece of pre-existing work).
+   impulse_strength/mitigated/pattern/timestamp/classification —
+   status/touches/candle_index are NOT part of this fix (still WIP-only
+   elsewhere, owned by a separate, unrelated piece of pre-existing work).
+   (impulse_strength was renamed from "strength" in Fix #5D1 — same
+   body/ATR formula, clarified name since nothing treats it as a
+   zone-quality/conviction score.)
 2. detect_zones() computes real pattern/timestamp values (not placeholders).
 3. Output._build_supply_demand_zones() serializes classification as-is —
    a plain passthrough. Fix #5B originally excluded this key here because
@@ -34,7 +37,7 @@ from core.core_models import CandleSnapshot
 from core.demand_engine import SupplyDemandZone, detect_zones
 
 REQUIRED_FIELDS = {
-    "type", "top", "bottom", "valid", "strength", "mitigated",
+    "type", "top", "bottom", "valid", "impulse_strength", "mitigated",
     "pattern", "timestamp", "classification",
 }
 NOT_YET_CANONICAL_FIELDS = {"status", "touches", "candle_index"}
