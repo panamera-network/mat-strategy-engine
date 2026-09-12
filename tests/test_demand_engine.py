@@ -11,8 +11,8 @@ from core.core_models import CandleSnapshot
 from core.demand_engine import DemandEngine, SupplyDemandZone, select_active_zone
 
 
-def make_zone(zone_type, top, bottom, valid=True):
-    return SupplyDemandZone(type=zone_type, top=top, bottom=bottom, valid=valid)
+def make_zone(zone_type, top, bottom, valid=True, mitigated=False):
+    return SupplyDemandZone(type=zone_type, top=top, bottom=bottom, valid=valid, mitigated=mitigated)
 
 
 def make_candle(o, h, l, c):
@@ -85,11 +85,73 @@ def test_multiple_zones_nearest_wins_regardless_of_type():
 
 
 def test_invalid_zone_ignored_even_if_nearer():
-    near_but_mitigated = make_zone("demand", top=100.1, bottom=100.0, valid=False)
+    near_but_invalidated = make_zone("demand", top=100.1, bottom=100.0, valid=False)
     far_but_valid = make_zone("supply", top=110, bottom=109, valid=True)
-    zone_type, level = select_active_zone([near_but_mitigated, far_but_valid], current_price=100.0)
+    zone_type, level = select_active_zone([near_but_invalidated, far_but_valid], current_price=100.0)
     assert zone_type == "supply"
     assert level == 109
+
+
+# ── Fix #5E3B — eligibility = valid AND NOT mitigated ────────────────────
+
+def test_mitigated_but_valid_zone_excluded_from_active_context():
+    """Fix #5E3A found a mitigated-but-valid zone (touched/closed-into but
+    not invalidated) was being selected identically to a fresh one. Fix
+    #5E3B excludes it: even though it's nearer to current_price, it must
+    not be picked."""
+    near_but_mitigated = make_zone("demand", top=100.1, bottom=100.0, valid=True, mitigated=True)
+    far_but_fresh = make_zone("supply", top=110, bottom=109, valid=True, mitigated=False)
+    zone_type, level = select_active_zone([near_but_mitigated, far_but_fresh], current_price=100.0)
+    assert zone_type == "supply"
+    assert level == 109
+
+
+def test_fresh_valid_zone_selected_instead_of_mitigated_one():
+    """Same setup, phrased from the other side: with a mitigated zone
+    present, a fresh valid zone is the one actually returned."""
+    mitigated = make_zone("demand", top=100.1, bottom=100.0, valid=True, mitigated=True)
+    fresh = make_zone("supply", top=101, bottom=100.5, valid=True, mitigated=False)
+    zone_type, level = select_active_zone([mitigated, fresh], current_price=100.0)
+    assert zone_type == "supply"
+    assert level == 100.5
+
+
+def test_invalidated_zone_still_excluded_alongside_mitigated_rule():
+    """The pre-existing valid=False exclusion still works unchanged when a
+    mitigated-but-valid zone is also present — both must be skipped in
+    favor of the only genuinely eligible (fresh, valid) zone."""
+    invalidated = make_zone("demand", top=100.1, bottom=100.0, valid=False, mitigated=True)
+    mitigated_but_valid = make_zone("supply", top=100.6, bottom=100.2, valid=True, mitigated=True)
+    fresh = make_zone("demand", top=95.0, bottom=94.0, valid=True, mitigated=False)
+    zone_type, level = select_active_zone([invalidated, mitigated_but_valid, fresh], current_price=100.0)
+    assert zone_type == "demand"
+    assert level == 95.0
+
+
+def test_no_eligible_zone_when_all_mitigated_or_invalidated():
+    only_ineligible = [
+        make_zone("demand", top=100.1, bottom=100.0, valid=False, mitigated=True),
+        make_zone("supply", top=101, bottom=100.5, valid=True, mitigated=True),
+    ]
+    assert select_active_zone(only_ineligible, current_price=100.0) == ("neutral", None)
+
+
+def test_nearest_and_tie_break_behavior_unchanged_among_eligible_zones():
+    """Re-run the existing nearest/tie-break scenarios with every zone
+    explicitly marked fresh (mitigated=False) to confirm the underlying
+    distance and list-position tie-break logic is byte-for-byte the same
+    as before this fix — only the eligibility gate changed."""
+    earlier = make_zone("demand", top=105, bottom=95, mitigated=False)   # contains 100.0
+    later = make_zone("supply", top=101, bottom=99, mitigated=False)    # also contains 100.0
+    zone_type, level = select_active_zone([earlier, later], current_price=100.0)
+    assert zone_type == "supply", "later zone (list position) must still win on a distance tie"
+    assert level == 99
+
+    far_demand = make_zone("demand", top=50, bottom=45, mitigated=False)
+    near_supply = make_zone("supply", top=101, bottom=100.5, mitigated=False)
+    zone_type, level = select_active_zone([far_demand, near_supply], current_price=100.0)
+    assert zone_type == "supply"
+    assert level == 100.5
 
 
 def test_no_candles_is_neutral_via_get_context():

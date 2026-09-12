@@ -1,11 +1,11 @@
 """Fix #5B (canonical) — targeted tests proving:
 1. SupplyDemandZone's canonical field set includes type/top/bottom/valid/
-   impulse_strength/mitigated/pattern/timestamp/classification —
-   status/touches/candle_index are NOT part of this fix (still WIP-only
+   impulse_strength/mitigated/invalidated/pattern/timestamp/touch_count/
+   classification — candle_index is NOT part of this fix (still WIP-only
    elsewhere, owned by a separate, unrelated piece of pre-existing work).
-   (impulse_strength was renamed from "strength" in Fix #5D1 — same
-   body/ATR formula, clarified name since nothing treats it as a
-   zone-quality/conviction score.)
+   (impulse_strength was renamed from "strength" in Fix #5D1. status/
+   touches were renamed/redefined to touch_count + invalidated in Fix
+   #5E3 — see test_zone_freshness_model.py for that state machine.)
 2. detect_zones() computes real pattern/timestamp values (not placeholders).
 3. Output._build_supply_demand_zones() serializes classification as-is —
    a plain passthrough. Fix #5B originally excluded this key here because
@@ -16,13 +16,13 @@
    was removed and these tests updated accordingly (see
    test_zone_classification_wiring.py for the Fix #5C wiring itself).
 
-Note on tests 1 (exact-exclusion): the working tree may have unrelated
-pre-existing WIP (status/touches/candle_index) sitting in the same file,
-owned by other work this fix doesn't touch or remove — see CLAUDE.md's
-isolate-before-stage convention used throughout this repo's Fix #N work.
-That test skips (doesn't fail) when it detects that WIP is present, since
-the exact-exclusion guarantee is a property of the isolated Fix #5B diff
-(HEAD + this fix only), not of whatever else happens to be uncommitted
+Note on test 1 (exact-exclusion): the working tree may have unrelated
+pre-existing WIP (candle_index) sitting in the same file, owned by other
+work this fix doesn't touch or remove — see CLAUDE.md's isolate-before-stage
+convention used throughout this repo's Fix #N work. That test skips
+(doesn't fail) when it detects that WIP is present, since the
+exact-exclusion guarantee is a property of the isolated Fix diff (HEAD +
+canonical fixes only), not of whatever else happens to be uncommitted
 alongside it. The presence check itself (required fields exist) always runs.
 
 Run in isolation (the rest of /tests is broken on unrelated pre-existing
@@ -38,9 +38,9 @@ from core.demand_engine import SupplyDemandZone, detect_zones
 
 REQUIRED_FIELDS = {
     "type", "top", "bottom", "valid", "impulse_strength", "mitigated",
-    "pattern", "timestamp", "classification",
+    "invalidated", "pattern", "timestamp", "touch_count", "classification",
 }
-NOT_YET_CANONICAL_FIELDS = {"status", "touches", "candle_index"}
+NOT_YET_CANONICAL_FIELDS = {"candle_index"}
 
 
 def make_candle(o, h, l, c, ts):
@@ -55,14 +55,14 @@ def test_canonical_required_fields_present():
     assert not missing, f"canonical fields missing: {missing}"
 
 
-def test_canonical_field_set_excludes_status_touches_candle_index():
+def test_canonical_field_set_excludes_candle_index():
     field_names = {f.name for f in fields(SupplyDemandZone)}
     present_wip = field_names & NOT_YET_CANONICAL_FIELDS
     if present_wip:
         pytest.skip(
             f"unrelated pre-existing WIP fields present in working tree: {present_wip} — "
-            "not owned by Fix #5B; this exclusion guarantee holds for the isolated "
-            "HEAD+Fix#5B build (verified separately), not the ambient WIP-mixed tree"
+            "not owned by this fix; this exclusion guarantee holds for the isolated "
+            "HEAD+canonical-fixes build (verified separately), not the ambient WIP-mixed tree"
         )
     assert field_names == REQUIRED_FIELDS, f"unexpected canonical field set: {field_names}"
 
@@ -128,8 +128,8 @@ if __name__ == "__main__":
     print("[PASS] canonical fields (pattern/timestamp/classification/...) present")
 
     try:
-        test_canonical_field_set_excludes_status_touches_candle_index()
-        print("[PASS] canonical field set excludes status/touches/candle_index")
+        test_canonical_field_set_excludes_candle_index()
+        print("[PASS] canonical field set excludes candle_index")
     except Exception:
         print("[SKIP] canonical field set exclusion — unrelated WIP present in working tree")
 

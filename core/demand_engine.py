@@ -32,17 +32,35 @@ class SupplyDemandZone:
     type: str            # "demand" or "supply"
     top: float
     bottom: float
+    # Fix #5E3 — valid is now derived from invalidated (valid = not
+    # invalidated), decoupled from mitigated. A zone can be mitigated
+    # (touched/closed-into) while still valid, until price actually closes
+    # through the distal boundary.
     valid: bool = True
     # Fix #5D1 — renamed from "strength": this is the originating candle's
     # body-to-ATR ratio (impulse size), not a zone-quality/conviction
     # score — nothing (selector, classification, strategy) reads it as
     # such, and it must not be treated as one. Formula unchanged.
     impulse_strength: float = 0.0
+    # Fix #5E3 — True once at least one later candle's CLOSE lands inside
+    # [bottom, top] (a soft "this level was closed back into" signal).
+    # No longer tied to valid/invalidated.
     mitigated: bool = False
-    # Fix #5B — pattern/timestamp adopted as canonical (minimum needed for
-    # classification below); status/touches/candle_index deliberately left
-    # out — still WIP-only, not needed for reversal/continuation/unknown.
+    # Fix #5E3 — True once a later candle's CLOSE breaches the zone's
+    # distal boundary (demand: close < bottom; supply: close > top) — the
+    # decisive "this level failed" signal. valid is exactly `not invalidated`.
+    invalidated: bool = False
+    # Fix #5B — pattern adopted as canonical (minimum needed for
+    # classification below); candle_index deliberately left out — still
+    # WIP-only, not needed for reversal/continuation/unknown.
     pattern: str = ""
+    # Fix #5E3 — renamed from "touches", and redefined: counts distinct
+    # visit EPISODES (wick-inclusive contact), not raw candle occurrences.
+    # Consecutive candles overlapping the zone are one visit; exiting then
+    # re-entering starts a new one. status (WIP-only "tested"/"untested"
+    # string) is dropped entirely — fully derivable from touch_count/
+    # mitigated/invalidated wherever a display label is actually needed.
+    touch_count: int = 0
     timestamp: str | None = None
     # Additive location-in-move label: "reversal", "continuation", or
     # "unknown". Not set by detect_zones() itself (zone detection/
@@ -68,8 +86,11 @@ def compute_atr(candles: List[CandleSnapshot], period: int = ATR_PERIOD) -> floa
 
 
 def detect_zones(candles: List[CandleSnapshot]) -> List[SupplyDemandZone]:
-    """Demand/supply zones from strong-bodied candles (body > 60% of ATR),
-    marked mitigated once price closes back inside the zone."""
+    """Demand/supply zones from strong-bodied candles (body > 60% of ATR).
+    Freshness (Fix #5E3): mitigated once a later candle closes back inside
+    the zone; invalidated (and no longer valid) once a later candle closes
+    through the zone's distal boundary; touch_count tracks distinct
+    wick-overlap visit episodes. See SupplyDemandZone field comments."""
     atr = compute_atr(candles)
     if atr <= 0:
         return []
@@ -100,9 +121,32 @@ def detect_zones(candles: List[CandleSnapshot]) -> List[SupplyDemandZone]:
                 timestamp=str(c.timestamp),
             )
 
+        # Fix #5E3 — canonical freshness model: touch_count tracks distinct
+        # visit episodes (wick-inclusive overlap; a run of consecutive
+        # overlapping candles is one visit, exiting and re-entering starts
+        # a new one), mitigated fires on the first close-inside-zone candle
+        # (a soft "was closed back into" signal), and invalidated fires on
+        # the first close through the zone's distal boundary (a decisive
+        # failure) — scanning stops there since the zone's life is over.
+        in_visit = False
         for later in candles[i + 1:]:
+            overlaps = later.low <= zone.top and later.high >= zone.bottom
+            if overlaps:
+                if not in_visit:
+                    zone.touch_count += 1
+                    in_visit = True
+            else:
+                in_visit = False
+
             if zone.bottom <= later.close <= zone.top:
                 zone.mitigated = True
+
+            if zone.type == "demand" and later.close < zone.bottom:
+                zone.invalidated = True
+                zone.valid = False
+                break
+            if zone.type == "supply" and later.close > zone.top:
+                zone.invalidated = True
                 zone.valid = False
                 break
 
@@ -151,17 +195,28 @@ def _zone_pattern(candles: List[CandleSnapshot], index: int, zone_type: str) -> 
 
 def select_active_zone(zones: List[SupplyDemandZone], current_price: float) -> Tuple[str, Optional[float]]:
     """Canonical DemandEngine context selector (Fix #4B) — the single zone-
-    selection rule for this engine. Picks the active (valid) zone nearest to
-    current_price; distance is 0 if current_price sits inside [bottom, top].
-    On a distance tie, the LATER zone in `zones` wins — list position only;
-    this canonical selector still doesn't depend on timestamp or the
-    WIP-only candle_index for that tie-break.
+    selection rule for this engine. Picks the active (fresh, valid) zone
+    nearest to current_price; distance is 0 if current_price sits inside
+    [bottom, top]. On a distance tie, the LATER zone in `zones` wins — list
+    position only, not candle_index/timestamp (WIP-only fields this
+    canonical selector deliberately does not depend on).
     demand level = top (proximal edge, price approaches from above);
     supply level = bottom (proximal edge, price approaches from below).
     No active zone -> ("neutral", None). Wired into StructureEngine via
     get_context() (Fix #4C/#4D3) — the legacy detect_snd() heuristic in
-    structure_utils.py has since been removed (Fix #4E1)."""
-    active = [z for z in zones if z.valid]
+    structure_utils.py has since been removed (Fix #4E1).
+
+    Fix #5E3B — eligibility is `valid AND NOT mitigated` (Fix #5E3A found
+    a mitigated-but-valid zone was being selected identically to a fresh
+    one, with no way for downstream consumers — EntrySuggestionEngine,
+    the strategies, ShiftEngine — to know the level had already been
+    touched). touch_count is deliberately not used for ranking here — this
+    is a plain eligibility gate, not a quality score. invalidated has no
+    new logic of its own; valid (`not invalidated`) already gates that.
+    The raw zone objects this reads are untouched — a zone can still
+    legitimately be `mitigated=True, valid=True` in the canonical data;
+    this selector now simply excludes it from being the active context."""
+    active = [z for z in zones if z.valid and not z.mitigated]
     if not active:
         return "neutral", None
 
