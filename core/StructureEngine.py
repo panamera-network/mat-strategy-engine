@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from core.CandleEngine import CandleEngine
+from core.demand_engine import DemandEngine
 from core.FVGEngine import detect_fvg
 from core.MomentumEngine import MomentumEngine
 from core.OrderBlockEngine import detect_order_blocks
@@ -11,7 +12,6 @@ from core.core_models import PriceSnapshot, StructureSnapshot
 from core.structure_utils import (
     SWING_LOOKBACK,
     SWING_WINDOW,
-    detect_snd,
     detect_structure_event,
     detect_trend,
     derive_snr_levels,
@@ -29,8 +29,15 @@ FETCH_COUNT = SWING_LOOKBACK + SWING_WINDOW * 2  # buffer so the lookback window
 # ─────────────────────────────────────────────
 # 🧠 Structure Engine
 class StructureEngine:
-    def __init__(self, candle_engine: CandleEngine):
+    def __init__(self, candle_engine: CandleEngine, demand_engine: Optional[DemandEngine] = None):
         self.candle_engine = candle_engine
+        # Optional — injected by the composition root (api/core_router.py).
+        # context_zone/context_level now come exclusively from DemandEngine's
+        # canonical get_context() (Fix #4C); StructureEngine no longer calls
+        # detect_snd() itself. detect_snd() is left in structure_utils.py as
+        # legacy, not deleted. If no demand_engine is injected, context
+        # degrades to ("neutral", None) rather than detecting independently.
+        self.demand_engine = demand_engine
 
     def get_snapshot(self, symbol: str, tf: str, cache=None) -> Optional[StructureSnapshot]:
         candles = self.candle_engine.get_snapshots(symbol, tf, count=FETCH_COUNT, cache=cache)
@@ -64,7 +71,14 @@ class StructureEngine:
             prev_high=prev.high,
             prev_low=prev.low
         )
-        snd = detect_snd(prev, curr)
+
+        # Fix #4C — canonical context_zone/context_level, via DemandEngine's
+        # get_context() (same call, same cache, no separate computation of
+        # our own). detect_snd() is legacy and no longer called from here.
+        if self.demand_engine is not None:
+            context_zone, context_level = self.demand_engine.get_context(symbol, tf, cache=cache)
+        else:
+            context_zone, context_level = "neutral", None
 
         snapshot = StructureSnapshot(
             symbol=symbol,
@@ -77,8 +91,8 @@ class StructureEngine:
             prev_zone="Neutral",
             momentum=0.0,
             timestamp=datetime.now(timezone.utc),
-            context_zone=snd["type"],
-            context_level=snd["level"],
+            context_zone=context_zone,
+            context_level=context_level,
             snr_levels=snr_levels,
             order_blocks=order_blocks,
             fvg=fvg,

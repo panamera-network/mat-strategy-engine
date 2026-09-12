@@ -25,14 +25,18 @@ router = APIRouter()
 # Instantiate shared engines
 candle_engine = CandleEngine()
 strength_engine = StrengthEngine()
-structure_engine = StructureEngine(candle_engine)
+demand_engine = DemandEngine(candle_engine)
+# demand_engine injected so StructureEngine resolves context_zone/context_level
+# through the same canonical DemandEngine.get_context() every other caller
+# uses, instead of detecting SND independently (detect_snd() is legacy now —
+# still in structure_utils.py, just no longer called — see Fix #4/#4C).
+structure_engine = StructureEngine(candle_engine, demand_engine=demand_engine)
 # structure_engine injected so BiasEngine resolves BOS/CHoCH through the same
 # StructureEngine.get_snapshot() every other caller uses, even when a caller
 # doesn't explicitly hand in a structure_snapshot/structure_map (see
 # BiasEngine._resolve_structure()) — no independent detection either way.
 bias_engine = BiasEngine(candle_engine, strength_engine, structure_engine=structure_engine)
 momentum_engine = MomentumEngine(candle_engine)
-demand_engine = DemandEngine(candle_engine)
 shift_engine = ShiftEngine(candle_engine)
 
 @router.get("/symbols")
@@ -84,7 +88,7 @@ def get_structure_snapshots(
     symbols: List[str] = ["XAUUSD_i", "BTCUSD_i", "EURUSD_i"],
     tf: str = "M15", 
 ):
-    engine = StructureEngine(candle_engine)
+    engine = StructureEngine(candle_engine, demand_engine=demand_engine)
     snapshots = engine.batch_snapshots(symbols, tf)
     return snapshots
 
@@ -95,7 +99,7 @@ def get_bias_shift_events(
     tf: str = "M15",
    
 ):
-    structure_engine = StructureEngine(candle_engine)
+    structure_engine = StructureEngine(candle_engine, demand_engine=demand_engine)
     events: List[BiasShiftEvent] = []
 
     for symbol in symbols:
@@ -120,7 +124,7 @@ def get_multi_tf_bias_shift_events(
     timeframes: List[str] = ["M15", "H1", "H4"],
     
 ):
-    structure_engine = StructureEngine(candle_engine)
+    structure_engine = StructureEngine(candle_engine, demand_engine=demand_engine)
     events: List[BiasShiftEvent] = []
 
     for symbol in symbols:
