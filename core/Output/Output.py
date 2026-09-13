@@ -25,15 +25,32 @@ SWING_TFS = [tf for tf in TIMEFRAMES if tf not in SCALPING_TFS]
 # Normalization thresholds — named instead of scattered magic numbers
 MAX_MOMENTUM = 2.0
 MAX_BIAS = 4.0
-MOMENTUM_BAND_WEAK = 0.2
-MOMENTUM_BAND_MODERATE = 0.5
 ALIGNMENT_HISTORY_LIMIT = 10
+# Fix #6Z — canonical momentum display bands, in ATR units (Fix #6X/#6Y's
+# audit): a 3-bar displacement of less than half an ATR is "weak", up to a
+# full ATR is "moderate", a full ATR or more is "strong". Replaces the old
+# MOMENTUM_BAND_WEAK/MOMENTUM_BAND_MODERATE (0.2/0.5), which were tuned
+# against the legacy raw, unscaled momentum score — those constants had no
+# other callers and are removed rather than left dead.
+ATR_MOMENTUM_MODERATE_THRESHOLD = 0.5
+ATR_MOMENTUM_STRONG_THRESHOLD = 1.0
 
 
-def _momentum_band(abs_momentum: float) -> str:
-    if abs_momentum < MOMENTUM_BAND_WEAK:
+def _momentum_band(momentum: float | None) -> str | None:
+    """Fix #6Z — canonical band, sourced from atr_normalized_momentum
+    (signed, dimensionless, no clamp — see MomentumEngine.py). abs() is
+    applied internally (not by the caller) so a bullish and bearish
+    reading of equal magnitude always get the same label, regardless of
+    what a future caller passes in (Fix #6X's Q9 finding: relying on the
+    caller to pre-abs() is a fragile, unenforced contract). None
+    (canonical value unavailable) returns None explicitly — never a
+    guessed "weak"."""
+    if momentum is None:
+        return None
+    abs_momentum = abs(momentum)
+    if abs_momentum < ATR_MOMENTUM_MODERATE_THRESHOLD:
         return "weak"
-    if abs_momentum < MOMENTUM_BAND_MODERATE:
+    if abs_momentum < ATR_MOMENTUM_STRONG_THRESHOLD:
         return "moderate"
     return "strong"
 
@@ -61,9 +78,20 @@ def _normalize_snapshot(snap) -> dict:
         momentum = float(f"{snap_dict['momentum']:.4f}")
         snap_dict["momentum"] = momentum
         abs_val = abs(momentum)
-        snap_dict["momentum_band"] = _momentum_band(abs_val)
+        # Fix #6Z — momentum_color is intentionally left on the legacy raw
+        # `momentum` value, unchanged: it's computed independently of
+        # momentum_band (via MAX_MOMENTUM, not the band string), and this
+        # fix's scope explicitly excludes MAX_MOMENTUM/momentum_color —
+        # only momentum_band migrates to the canonical source below.
         pct = abs_val / MAX_MOMENTUM * 100
         snap_dict["momentum_color"] = confidence_color(pct)
+
+    # Fix #6Z — momentum_band migrated to canonical atr_normalized_momentum
+    # (StyleSnapshot's additive field, sourced from
+    # StructureSnapshot.atr_normalized_momentum — see StyleEngine.py).
+    # Deliberately independent of the legacy `momentum` key above.
+    if "atr_normalized_momentum" in snap_dict:
+        snap_dict["momentum_band"] = _momentum_band(snap_dict["atr_normalized_momentum"])
 
     return snap_dict
 

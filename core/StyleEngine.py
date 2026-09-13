@@ -35,7 +35,15 @@ def get_style_snapshot(symbol, tf, mode,
         momentum=momentum.score,
         bias=bias.bias_score,
         demand=zone_label,
-        structure_label=structure.structure_type
+        structure_label=structure.structure_type,
+        # Fix #6Z — canonical momentum evidence, reused from the already-
+        # fetched `structure` snapshot (StructureEngine already computed
+        # this via MomentumEngine.compute() — no extra fetch, no second
+        # MomentumEngine call). `momentum` above (legacy raw score) is
+        # untouched. getattr() defensively handles minimal fake/test
+        # structure objects that predate this field (e.g. this file's own
+        # test doubles) — None, same as the canonical "unavailable" value.
+        atr_normalized_momentum=getattr(structure, "atr_normalized_momentum", None),
     )
 
     # Step 2: Detect zone interaction with conviction-aware coloring

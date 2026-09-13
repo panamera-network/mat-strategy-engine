@@ -331,6 +331,13 @@ class StyleSnapshot:
     zone_interaction: bool = False
     zone_interaction_direction: str = "Neutral"
     zone_interaction_color: str = "#cccccc"
+    # Fix #6Z — canonical signed, dimensionless momentum evidence
+    # (slope2/ATR14, no clamp/multiplier), copied from
+    # StructureSnapshot.atr_normalized_momentum (see StyleEngine.py). None
+    # when unavailable. Additive only — `momentum` above (the legacy raw
+    # score) is untouched; only the display band/color path (Output.py)
+    # reads this new field, not conviction/alignment/suppression.
+    atr_normalized_momentum: float | None = None
     demand: str = "neutral"
     duration: str = "0 min"
     conviction: float = 0.0

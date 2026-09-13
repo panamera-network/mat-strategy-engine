@@ -301,9 +301,11 @@ def test_live_output_momentum_evidence_matches_canonical_structure_value():
 
 def test_live_style_snapshot_and_alignment_unaffected():
     """This fix must not migrate StyleSnapshot.momentum, alignment, or
-    conviction -- confirm the live scalping/swing blocks are unchanged in
-    shape (no new key leaked in) and StyleSnapshot.momentum still reads
-    the legacy raw .score, not the new normalized value."""
+    conviction -- confirm StyleSnapshot.momentum still reads the legacy raw
+    .score, not the new normalized value. Fix #6Z later added
+    atr_normalized_momentum onto StyleSnapshot additively (so it does now
+    appear in the live scalping/swing blocks, by design) -- this test only
+    guards the legacy `momentum` key, not the absence of the new one."""
     import api.core_router as cr
     from core.candle_cache import CandleCache
     from core.Output.Output import build_multi_symbol_output
@@ -319,7 +321,8 @@ def test_live_style_snapshot_and_alignment_unaffected():
     )
     assert "error" not in out[symbol]
     scalping_m15 = out[symbol]["scalping"]["M15"]
-    assert "atr_normalized_momentum" not in scalping_m15
+    momentum_snapshot = cr.momentum_engine.get_momentum(symbol, "M15", cache=cache)
+    assert scalping_m15["momentum"] == float(f"{momentum_snapshot.score:.4f}")
 
 
 if __name__ == "__main__":
