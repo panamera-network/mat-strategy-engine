@@ -110,8 +110,8 @@ class BiasSnapshot:
 
 @dataclass
 class MomentumSnapshot:
-    symbol: str 
-    timeframe: str 
+    symbol: str
+    timeframe: str
     momentum: float           # scaled 0–10
     slope: float              # directional slope
     acceleration: float       # change in slope
@@ -120,6 +120,15 @@ class MomentumSnapshot:
     confidence_drop: bool = False
     direction: str = "Neutral"
     score: float = 0.0        # raw float before scaling
+    # Fix #6V — canonical signed, dimensionless momentum: slope2 (the same
+    # 3-bar displacement `score` above is built from) divided by ATR14, no
+    # clamp, no multiplier (Fix #6U's audit conclusion). None whenever
+    # MomentumEngine.compute() wasn't given enough candles for a genuine
+    # 14-period ATR (needs >=15) — deliberately not backfilled with a
+    # different/shorter denominator. Additive only; momentum/slope/
+    # acceleration/reversal/direction/score/confidence_drop above are
+    # unchanged and still computed exactly as before.
+    atr_normalized_momentum: float | None = None
 
 
 class StructureLabel(str, Enum):
@@ -196,6 +205,13 @@ class StructureSnapshot:
     context_level: float | None = None
     momentum: float = 0.0
     confidence_drop: bool = False
+    # Fix #6V — canonical signed, dimensionless momentum (slope2/ATR14, no
+    # clamp/multiplier), copied straight from MomentumEngine's
+    # MomentumSnapshot.atr_normalized_momentum. None when MomentumEngine
+    # didn't have enough candles for a genuine ATR14 — never backfilled
+    # with a different denominator. Additive; the existing `momentum`
+    # field above is untouched.
+    atr_normalized_momentum: float | None = None
     strength: float = 0.0
     body_ratio: float = 0.0
     momentum_slope: float = 0.0

@@ -202,6 +202,30 @@ def _build_structure_extras(structure_map: dict) -> tuple:
     return snr_levels, order_blocks, fvg, swing_points, structure_events
 
 
+def _build_momentum_evidence(structure_map: dict) -> dict:
+    """Fix #6V — canonical signed, dimensionless momentum evidence
+    (slope2/ATR14, no clamp/multiplier — Fix #6U's audit conclusion).
+    Read directly off StructureSnapshot.atr_normalized_momentum, already
+    computed via MomentumEngine.compute() during structure_map's
+    construction above — no new engine calls, no extra candle fetch.
+
+    Exposed per timeframe regardless of whether a BOS/CHoCH is confirmed
+    (unlike structure_events, which is filtered to structure_valid=True) —
+    this is a general momentum signal, not a structural-event fact. None
+    for a tf whenever MomentumEngine didn't have enough candles for a
+    genuine 14-period ATR (see MomentumEngine.ATR14_MIN_CANDLES);
+    StructureEngine's canonical path always supplies enough, so this is
+    only ever None if called with an unusually small candle window.
+
+    Additive only — StyleSnapshot.momentum, alignment's ±0.3 check,
+    conviction, momentum bands/colors, and Suppression are untouched and
+    do not read this key."""
+    return {
+        tf: {"atr_normalized_momentum": s.atr_normalized_momentum}
+        for tf, s in structure_map.items()
+    }
+
+
 def _build_supply_demand_zones(symbol: str, demand_engine, cache=None, zones_map: dict = None, structure_map: dict = None) -> dict:
     """Fix #4D3 — reuses the same request-scoped zones_map StructureEngine's
     context already consumed above, instead of calling
@@ -349,6 +373,7 @@ def _build_symbol_snapshot(
     display_block["fvg"] = fvg
     display_block["swing_points"] = swing_points
     display_block["structure_events"] = structure_events
+    display_block["momentum_evidence"] = _build_momentum_evidence(structure_map)
     display_block["supply_demand_zones"] = _build_supply_demand_zones(symbol, demand_engine, cache=cache, zones_map=zones_map, structure_map=structure_map)
 
     # Cache for next pass (deltas, history, etc.)

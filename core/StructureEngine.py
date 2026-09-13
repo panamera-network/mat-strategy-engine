@@ -144,6 +144,12 @@ class StructureEngine:
         momentum_snapshot = momentum_engine.compute(candles, symbol, tf)
         snapshot.momentum = momentum_snapshot.momentum
         snapshot.confidence_drop = momentum_snapshot.confidence_drop
+        # Fix #6V — canonical signed, dimensionless momentum (slope2/ATR14).
+        # `candles` here is already the full FETCH_COUNT (26) window, well
+        # above ATR14_MIN_CANDLES, so this is populated from the same
+        # compute() call above — no extra fetch, no second MomentumEngine
+        # call.
+        snapshot.atr_normalized_momentum = momentum_snapshot.atr_normalized_momentum
 
         strength_diag = strength_engine.compute_strength(candles)
         snapshot.strength = strength_diag.strength

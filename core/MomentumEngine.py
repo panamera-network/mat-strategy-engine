@@ -1,6 +1,12 @@
 from core.CandleEngine import CandleEngine
 from core.core_models import CandleSnapshot, MomentumSnapshot
+from core.demand_engine import compute_atr
 from core.log import log_error
+
+# Fix #6V — minimum candles for a genuine 14-period ATR (14 true-range
+# values need 15 candles). Below this, atr_normalized_momentum is None
+# rather than computed from a shorter/different-period ATR.
+ATR14_MIN_CANDLES = 15
 
 
 class MomentumEngine:
@@ -34,6 +40,22 @@ class MomentumEngine:
         bearish_condition = False
         divergence_label = "Bullish" if bullish_condition else "Bearish" if bearish_condition else "None"
 
+        # Fix #6U/#6V — canonical signed, dimensionless momentum: the same
+        # slope2 (3-bar displacement) above, divided by ATR14 — no clamp,
+        # no multiplier, no threshold. Uses whatever `candles` this call
+        # was already given (StructureEngine's canonical path already
+        # passes its full 26-candle FETCH_COUNT window here — no extra
+        # fetch). If this call was given fewer than ATR14_MIN_CANDLES
+        # (e.g. MomentumEngine.get_momentum()/get_score()'s own count=6
+        # fetch), atr_normalized_momentum is None — deliberately not
+        # backfilled with a shorter/different-period ATR or any other
+        # fallback denominator.
+        atr_normalized_momentum = None
+        if len(candles) >= ATR14_MIN_CANDLES:
+            atr14 = compute_atr(candles, period=14)
+            if atr14:
+                atr_normalized_momentum = slope2 / atr14
+
         return MomentumSnapshot(
             symbol=symbol,
             timeframe=timeframe,
@@ -44,7 +66,8 @@ class MomentumEngine:
             divergence=divergence_label,
             confidence_drop=confidence_drop,
             direction=direction,
-            score=raw_score
+            score=raw_score,
+            atr_normalized_momentum=atr_normalized_momentum,
         )
 
     def get_momentum(self, symbol: str, timeframe: str, cache=None) -> MomentumSnapshot:
