@@ -18,6 +18,10 @@ def compute_alignment_signal(tf_snapshots: dict, mode: str) -> dict:
 
     total_score = 0
     breakdown = {}
+    # Fix #6G — two contributors per tf (direction, momentum), so this stays
+    # sum(abs(w) * 2 ...) — correct again now that zone interaction no
+    # longer votes below (it never should have counted as a third ±1
+    # contributor here; see Fix #6F's audit).
     max_possible = sum(abs(w) * 2 for w in weights.values())
 
     for tf in selected_tfs:
@@ -29,19 +33,13 @@ def compute_alignment_signal(tf_snapshots: dict, mode: str) -> dict:
         if hasattr(snap, "direction"):
             direction = snap.direction
             momentum = snap.momentum
-            shift_confirmed = snap.shift_confirmed
-            shift_direction = snap.shift_direction
         elif isinstance(snap, dict):
             direction = snap.get("direction")
             momentum = snap.get("momentum")
-            shift_confirmed = snap.get("shift_confirmed")
-            shift_direction = snap.get("shift_direction")
         else:
             snap = snap.__dict__.copy()
             direction = snap.get("direction")
             momentum = snap.get("momentum")
-            shift_confirmed = snap.get("shift_confirmed")
-            shift_direction = snap.get("shift_direction")
 
         score = 0
         if direction in ["uptrend", "bullish"]:
@@ -55,10 +53,16 @@ def compute_alignment_signal(tf_snapshots: dict, mode: str) -> dict:
             elif momentum < -0.3:
                 score -= 1
 
-        if shift_confirmed and shift_direction == "Bullish":
-            score += 1
-        elif shift_confirmed and shift_direction == "Bearish":
-            score -= 1
+        # Fix #6G — zone interaction (legacy shift_confirmed/shift_direction,
+        # canonical zone_interaction/zone_interaction_direction) no longer
+        # contributes to this score (Fix #6F's audit: a mere price/zone
+        # touch was voting equally with bias and momentum, and could single-
+        # handedly cross the Go Long/Go Short threshold on higher-weighted
+        # swing timeframes). It remains fully observable elsewhere — every
+        # per-tf StyleSnapshot in /core/output already carries
+        # zone_interaction/zone_interaction_direction/zone_interaction_color
+        # (Fix #6D) alongside the legacy shift_* aliases — so nothing is
+        # lost, it simply no longer votes on this decision.
 
         weighted_score = score * weights[tf]
         breakdown[tf] = round(weighted_score, 2)
