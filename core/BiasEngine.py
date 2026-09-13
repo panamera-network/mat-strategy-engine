@@ -62,19 +62,35 @@ class BiasEngine:
         # window get_snapshots() returned by default, which is a different
         # window than StructureEngine's own SWING_LOOKBACK slice — the two
         # engines could disagree on BOS/CHoCH for the same symbol/tf.)
-        if (
-            structure_snapshot is not None
-            and structure_snapshot.structure_valid
-            and structure_snapshot.structure_type in STRUCTURE_BIAS_SCORE
-        ):
+        if structure_snapshot is not None and structure_snapshot.structure_valid:
+            structure_type = structure_snapshot.structure_type
             direction = structure_snapshot.structure_direction
-            score = STRUCTURE_BIAS_SCORE[structure_snapshot.structure_type]
-            bias_score = score if direction == "Bullish" else -score
-            bias_label = "uptrend" if direction == "Bullish" else "downtrend"
-            return bias_label, bias_score
 
-        # Fallback: no confirmed BOS/CHoCH (or no structure snapshot supplied)
-        # — use the existing candle-ratio logic.
+            if structure_type == "CHOCH":
+                score = STRUCTURE_BIAS_SCORE["CHOCH"]
+                bias_score = score if direction == "Bullish" else -score
+                bias_label = "uptrend" if direction == "Bullish" else "downtrend"
+                return bias_label, bias_score
+
+            if structure_type == "BOS":
+                # Fix #6I — full BOS continuation score only when
+                # pre_break_trend actually matches structure_direction, i.e.
+                # a genuinely established same-direction trend was broken
+                # with (Fix #6H's audit). Neutral, missing, or mismatched
+                # pre_break_trend means today's BOS label is a
+                # default/fallback (Fix #6B), not evidenced continuation —
+                # fall through to the candle-ratio fallback below instead
+                # of inventing a score.
+                pre_break_trend = structure_snapshot.pre_break_trend
+                if direction == "Bullish" and pre_break_trend == "Bullish":
+                    return "uptrend", STRUCTURE_BIAS_SCORE["BOS"]
+                if direction == "Bearish" and pre_break_trend == "Bearish":
+                    return "downtrend", -STRUCTURE_BIAS_SCORE["BOS"]
+
+        # Fallback: no confirmed BOS/CHoCH, no structure snapshot supplied,
+        # or a BOS whose pre_break_trend didn't match structure_direction
+        # (Neutral, missing, or inconsistent) — use the existing candle-ratio
+        # logic rather than a structure-derived score.
         up_closes = sum(1 for c in candles if c.close > c.open)
         down_closes = sum(1 for c in candles if c.close < c.open)
 
