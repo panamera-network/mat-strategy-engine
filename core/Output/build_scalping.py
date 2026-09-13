@@ -69,8 +69,20 @@ def build_scalping_diagnostic(symbol, scalping_map, bias_map, cfg):
             )
         ),
         "momentum_ok": m1 >= cfg.t_momentum_min and m5 >= cfg.t_momentum_min,
-        "structure_ok": st5 in {"BOS", "CHOCH"} or (st5 == "Neutral" and sh5),
+        # Fix #6E — structure_ok now means a real confirmed BOS/CHoCH only.
+        # It used to also accept a mere zone touch as a stand-in when
+        # structure was Neutral — Fix #6B's audit found this conflated
+        # zone_interaction (a price/zone-proximity signal) with actual
+        # structural confirmation. cascade_score below intentionally still
+        # reads this same key, so its value correctly reflects the fix.
+        "structure_ok": st5 in {"BOS", "CHOCH"},
         "shift_ok": bool(sh5),
+        # Fix #6E — canonical name for the same zone-touch signal as
+        # shift_ok above (kept for compatibility); reads StyleSnapshot's
+        # canonical zone_interaction field (Fix #6D) directly. Additive
+        # only — not part of cascade_score's explicit list below, so it
+        # cannot change that score.
+        "zone_interaction_ok": bool(scalping_map["M5"].zone_interaction),
         "demand_supports": demand_label in {"demand", "strong buy"},
         "suppression": sup1 or sup5,
     }

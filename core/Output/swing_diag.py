@@ -53,7 +53,16 @@ def enrich_swing_with_diagnostic(
         "h1_strength_ok": s_h1 >= cfg.t_strength_seed,
         "h4_strength_rising": (s_h4 - (_bias_strength(prev_bias_map.get("H4", {})) if prev_bias_map else s_h4)) >= cfg.t_strength_rising_delta,
         "momentum_ok": m_h1 >= cfg.t_momentum_min and m_h4 >= cfg.t_momentum_min,
-        "structure_ok": st_h4 in {"BOS", "CHOCH"} or (st_h4 == "Neutral" and sh_h4),
+        # Fix #6E — structure_ok now means a real confirmed BOS/CHoCH only
+        # (see build_scalping.py's comment for the full rationale). A
+        # separate zone_interaction_ok key was deliberately NOT added here:
+        # conviction_score below is computed generically over every
+        # checks.values() (sum of True / count), so adding any new key
+        # would change its denominator and silently alter the score — out
+        # of this fix's scope ("jangan ubah conviction/scoring weights").
+        # Zone interaction remains independently observable via the
+        # existing shift_ok key below, unchanged.
+        "structure_ok": st_h4 in {"BOS", "CHOCH"},
         "shift_ok": sh_h4,
         "demand_supports": dm_h4 in {"demand", "strong buy"},
         "suppression": sup_h1 or sup_h4

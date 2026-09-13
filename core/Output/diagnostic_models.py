@@ -96,8 +96,21 @@ def enrich_scalping_with_cascade(
         "m1_strength_ok": s1 >= cfg.t_strength_seed,
         "m5_strength_rising": (s5 - (get(prev_bias_map.get("M5", {}), "strength", s5) if prev_bias_map else s5)) >= cfg.t_strength_rising_delta,
         "momentum_ok": (m1_mom >= cfg.t_momentum_min) and (m5_mom >= cfg.t_momentum_min),
-        "structure_ok": (st5 in {"BOS", "CHOCH"}) or (st5 == "Neutral" and sh5),
+        # Fix #6E — structure_ok now means a real confirmed BOS/CHoCH only
+        # (see build_scalping.py's comment for the full rationale).
+        # NOTE: enrich_scalping_with_cascade() has no callers anywhere in
+        # this repo (confirmed via repo-wide search) — fixed here anyway
+        # for consistency with the other two diagnostic builders, rather
+        # than leaving the same bad pattern in place.
+        "structure_ok": (st5 in {"BOS", "CHOCH"}),
         "shift_ok": sh5,
+        # Fix #6E — canonical name for the same zone-touch signal as
+        # shift_ok above (kept for compatibility); reads the canonical
+        # zone_interaction field (Fix #6D) via the file's existing hybrid
+        # dict/object get() helper. Additive only — not part of
+        # cascade_score's explicit list below, so it cannot change that
+        # score.
+        "zone_interaction_ok": bool(get(m5_snap, "zone_interaction", sh5)),
         "demand_supports": dm5 in {"demand", "strong buy"},
         "suppression": sup1 or sup5
     }
