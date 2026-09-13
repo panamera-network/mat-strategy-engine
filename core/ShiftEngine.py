@@ -23,7 +23,17 @@ class ShiftEngine:
         self.current_shift_direction = {}
         self.last_shift_change = {}
 
-    def detect_shift(self, snapshot: StructureSnapshot, tf: str, conviction: Optional[float] = None, cache=None) -> dict:
+    def detect_zone_interaction(self, snapshot: StructureSnapshot, tf: str, conviction: Optional[float] = None, cache=None) -> dict:
+        """Fix #6D — canonical name for what this method has always actually
+        computed (per Fix #6A/#6B's audit): a single candle's wick reaching
+        a demand/supply zone's proximal edge. This is a price/zone-proximity
+        signal, not a structural one — it does not read BOS/CHoCH, swing
+        HH/HL/LH/LL, or momentum/displacement, and CHoCH is deliberately not
+        consulted here (that's `structural_shift`, a separate, already-
+        existing concept on StructureSnapshot — see Fix #6B). Detection
+        formula is byte-for-byte unchanged from the pre-rename
+        implementation, only the name (and the local variable names below,
+        for clarity) changed."""
         candles = self.candle_engine.get_snapshots(symbol=snapshot.symbol, tf=tf, count=1, cache=cache)
         if not candles:
             return self._build_result(False, "Neutral", "neutral", None, conviction)
@@ -36,31 +46,46 @@ class ShiftEngine:
             return self._build_result(False, "Neutral", "neutral", None, conviction)
 
         epsilon = 0.0002
-        shifted = False
-        shift_direction = "Neutral"
+        interacted = False
+        interaction_direction = "Neutral"
 
         if zone in ["demand", "support"] and candle.low <= level + epsilon:
-            shifted = True
-            shift_direction = "Bullish"
+            interacted = True
+            interaction_direction = "Bullish"
         elif zone in ["supply", "resistance"] and candle.high >= level - epsilon:
-            shifted = True
-            shift_direction = "Bearish"
+            interacted = True
+            interaction_direction = "Bearish"
 
         key = (snapshot.symbol, tf)
         prev_direction = self.current_shift_direction.get(key)
-        if prev_direction != shift_direction:
+        if prev_direction != interaction_direction:
             self.last_shift_change[key] = datetime.now(timezone.utc)
-        self.current_shift_direction[key] = shift_direction
+        self.current_shift_direction[key] = interaction_direction
 
-        return self._build_result(shifted, shift_direction, zone, level, conviction)
+        return self._build_result(interacted, interaction_direction, zone, level, conviction)
 
-    def _build_result(self, shifted: bool, shift_direction: str, zone: str, level: Optional[float], conviction: Optional[float]):
+    def detect_shift(self, snapshot: StructureSnapshot, tf: str, conviction: Optional[float] = None, cache=None) -> dict:
+        """Fix #6D — legacy name, kept as a thin alias so existing callers
+        (StyleEngine.py at the time of writing) don't break. Prefer
+        detect_zone_interaction() in new code; this delegates to it
+        unchanged."""
+        return self.detect_zone_interaction(snapshot, tf, conviction=conviction, cache=cache)
+
+    def _build_result(self, interacted: bool, interaction_direction: str, zone: str, level: Optional[float], conviction: Optional[float]):
+        color = self._conviction_color(interaction_direction, conviction)
         return {
-            "shifted": shifted,
-            "shift_direction": shift_direction,
-            "shift_color": self._conviction_color(shift_direction, conviction),
+            # Fix #6D — canonical keys.
+            "zone_interaction": interacted,
+            "zone_interaction_direction": interaction_direction,
+            "zone_interaction_color": color,
             "zone_type": zone,
-            "level": level
+            "level": level,
+            # Fix #6D — legacy aliases/mirrors, same values under the old
+            # names. Kept temporarily so existing diagnostic/alignment
+            # consumers reading these keys are unaffected by this rename.
+            "shifted": interacted,
+            "shift_direction": interaction_direction,
+            "shift_color": color,
         }
 
     def _conviction_color(self, shift_direction: str, conviction: Optional[float]) -> str:

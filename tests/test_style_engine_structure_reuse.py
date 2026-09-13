@@ -62,8 +62,14 @@ class FakeDemandEngine:
 
 
 class FakeShiftEngine:
+    def detect_zone_interaction(self, structure, tf, conviction=None, cache=None):
+        return {
+            "zone_interaction": False, "zone_interaction_direction": "none", "zone_interaction_color": "gray",
+            "shifted": False, "shift_direction": "none", "shift_color": "gray",
+        }
+
     def detect_shift(self, structure, tf, conviction=None, cache=None):
-        return {"shifted": False, "shift_direction": "none", "shift_color": "gray"}
+        return self.detect_zone_interaction(structure, tf, conviction=conviction, cache=cache)
 
     def get_last_shift_change_time(self, symbol, tf):
         return None

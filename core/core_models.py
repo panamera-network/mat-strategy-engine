@@ -287,6 +287,14 @@ class StyleSnapshot:
     shift_confirmed: bool = False
     shift_direction: str = "bearish"
     shift_color: str = "#cccccc"
+    # Fix #6D — canonical names for the same wick-touch-a-zone signal above
+    # (see core.ShiftEngine.detect_zone_interaction()). shift_confirmed/
+    # shift_direction/shift_color are kept as legacy aliases, set to the
+    # exact same values, so existing diagnostic/alignment consumers reading
+    # the old names are unaffected by this rename.
+    zone_interaction: bool = False
+    zone_interaction_direction: str = "Neutral"
+    zone_interaction_color: str = "#cccccc"
     demand: str = "neutral"
     duration: str = "0 min"
     conviction: float = 0.0

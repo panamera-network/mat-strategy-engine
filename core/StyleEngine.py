@@ -38,8 +38,9 @@ def get_style_snapshot(symbol, tf, mode,
         structure_label=structure.structure_type
     )
 
-    # Step 2: Detect shift with conviction-aware coloring
-    shift_result = shift_engine.detect_shift(structure, tf, conviction=snapshot.conviction, cache=cache)
+    # Step 2: Detect zone interaction with conviction-aware coloring
+    # (Fix #6D — canonical name; detect_shift() still exists as an alias).
+    zone_interaction_result = shift_engine.detect_zone_interaction(structure, tf, conviction=snapshot.conviction, cache=cache)
 
     # Step 3: Duration
     last_change_time = shift_engine.get_last_shift_change_time(symbol, tf)
@@ -47,10 +48,15 @@ def get_style_snapshot(symbol, tf, mode,
         elapsed_minutes = int((datetime.now(timezone.utc) - last_change_time).total_seconds() / 60)
         snapshot.duration = f"{elapsed_minutes} min"
 
-    # Step 4: Update shift fields
-    snapshot.shift_confirmed = shift_result["shifted"]
-    snapshot.shift_direction = shift_result["shift_direction"]
-    snapshot.shift_color = shift_result["shift_color"]
+    # Step 4: Update zone interaction fields — canonical (Fix #6D) plus the
+    # legacy shift_* aliases, set to the exact same values so existing
+    # diagnostic/alignment consumers are unaffected by this rename.
+    snapshot.zone_interaction = zone_interaction_result["zone_interaction"]
+    snapshot.zone_interaction_direction = zone_interaction_result["zone_interaction_direction"]
+    snapshot.zone_interaction_color = zone_interaction_result["zone_interaction_color"]
+    snapshot.shift_confirmed = zone_interaction_result["shifted"]
+    snapshot.shift_direction = zone_interaction_result["shift_direction"]
+    snapshot.shift_color = zone_interaction_result["shift_color"]
 
     return snapshot
 
