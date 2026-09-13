@@ -217,11 +217,12 @@ def test_legacy_momentum_key_ignored_even_if_present_and_huge():
 
 
 def test_display_max_config_momentum_entries_still_present_but_unused():
-    # Fix #6AC explicitly does not delete these yet -- confirm they're
-    # still there (a later cleanup fix removes them), even though the
-    # live momentum_pct/color computation above no longer reads them.
-    assert display_max_config["scalping"]["momentum"] == 50.0
-    assert display_max_config["swing"]["momentum"] == 2000.0
+    # Fix #6AC explicitly did not delete these yet -- they were still
+    # present (unused) at that point. Fix #6AD's cleanup has since removed
+    # them; confirm they're actually gone, not just unused.
+    assert "momentum" not in display_max_config["scalping"]
+    assert "momentum" not in display_max_config["swing"]
+    assert "momentum" not in display_max_config["default"]
 
 
 # ---------------------------------------------------------------------------
@@ -240,10 +241,18 @@ def test_bias_pct_unaffected_by_this_fix():
 # Dead scheme A (Output.py) and momentum_conf (Fix #6AB) untouched
 # ---------------------------------------------------------------------------
 
-def test_output_py_scheme_a_and_momentum_conf_untouched_by_this_fix():
+def test_output_py_scheme_a_removed_and_momentum_conf_untouched_by_this_fix():
+    # At the time Fix #6AC landed, dead scheme A (Output.py's
+    # _normalize_snapshot()) was still present but fully overwritten
+    # downstream. Fix #6AD has since removed it as a separate cleanup;
+    # confirm here that removal didn't touch momentum_conf's own constant,
+    # and that _normalize_snapshot() no longer produces a momentum_color
+    # key at all (helper.py's add_display_percentages() is now the only
+    # place that sets it -- see test_live_momentum_pct_color_bounded_and_
+    # matches_formula_across_classes below for end-to-end confirmation).
     from core.Output.Output import MAX_MOMENTUM, MOMENTUM_CONF_ATR_REFERENCE, _normalize_snapshot
-    assert MAX_MOMENTUM == 2.0  # Fix #6AA's dead scheme A constant, left alone
-    assert MOMENTUM_CONF_ATR_REFERENCE == 2.0  # Fix #6AB's momentum_conf constant, left alone
+    assert MAX_MOMENTUM == 2.0  # left defined, just no longer read by any live code
+    assert MOMENTUM_CONF_ATR_REFERENCE == 2.0  # Fix #6AB's momentum_conf constant, unaffected
 
     class FakeSnap:
         def __init__(self):
@@ -251,11 +260,7 @@ def test_output_py_scheme_a_and_momentum_conf_untouched_by_this_fix():
             self.atr_normalized_momentum = 0.5
 
     result = _normalize_snapshot(FakeSnap())
-    # scheme A is still alive in Output.py (still overwritten later by
-    # helper.py in the real pipeline, but its own formula is unchanged)
-    from core.Output.Output import confidence_color
-    expected_scheme_a_color = confidence_color(abs(165.84) / MAX_MOMENTUM * 100)
-    assert result["momentum_color"] == expected_scheme_a_color
+    assert "momentum_color" not in result
 
 
 # ---------------------------------------------------------------------------

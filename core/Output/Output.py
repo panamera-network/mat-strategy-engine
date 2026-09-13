@@ -23,6 +23,11 @@ SCALPING_TFS = set(SCALPING_ORDER)
 SWING_TFS = [tf for tf in TIMEFRAMES if tf not in SCALPING_TFS]
 
 # Normalization thresholds — named instead of scattered magic numbers
+# Fix #6AD — MAX_MOMENTUM's only live-code use (the dead scheme A
+# momentum_color write in _normalize_snapshot(), overwritten downstream by
+# add_display_percentages()) has been removed. Left defined rather than
+# deleted since it isn't part of this cleanup's explicit scope; no live
+# code reads it any more.
 MAX_MOMENTUM = 2.0
 MAX_BIAS = 4.0
 ALIGNMENT_HISTORY_LIMIT = 10
@@ -40,8 +45,10 @@ ATR_MOMENTUM_STRONG_THRESHOLD = 1.0
 # 100%. Chosen because it extends Fix #6Z's weak/moderate/strong ATR
 # landmarks (0.5/1.0) by one more step, landing exactly on
 # confidence_color's existing 25/50/75 tier boundaries at 0.5/1.0/1.5 ATR
-# (Fix #6AA's audit, Q6). Deliberately separate from MAX_MOMENTUM, which
-# still governs the untouched legacy momentum_color/momentum_pct chain.
+# (Fix #6AA's audit, Q6). Deliberately kept as its own named constant
+# rather than reusing MAX_MOMENTUM (same numeric value, different
+# presentation path) -- MAX_MOMENTUM's own legacy chain was since removed
+# entirely (Fix #6AD).
 MOMENTUM_CONF_ATR_REFERENCE = 2.0
 
 
@@ -84,16 +91,15 @@ def _normalize_snapshot(snap) -> dict:
         breakdown["zone_score"] = breakdown.pop("demand")
 
     if "momentum" in snap_dict:
+        # Fix #6AD — this block used to also set snap_dict["momentum_color"]
+        # here (confidence_color(abs(legacy momentum)/MAX_MOMENTUM*100)), but
+        # that write was always overwritten later by
+        # add_display_percentages() (core/Output/helper.py, Fix #6AC) before
+        # the value ever reached a consumer — confirmed dead by live
+        # comparison across all 36 symbols during Fix #6AA/#6AC's audits.
+        # Removed; momentum_color is now set exactly once, downstream.
         momentum = float(f"{snap_dict['momentum']:.4f}")
         snap_dict["momentum"] = momentum
-        abs_val = abs(momentum)
-        # Fix #6Z — momentum_color is intentionally left on the legacy raw
-        # `momentum` value, unchanged: it's computed independently of
-        # momentum_band (via MAX_MOMENTUM, not the band string), and this
-        # fix's scope explicitly excludes MAX_MOMENTUM/momentum_color —
-        # only momentum_band migrates to the canonical source below.
-        pct = abs_val / MAX_MOMENTUM * 100
-        snap_dict["momentum_color"] = confidence_color(pct)
 
     # Fix #6Z — momentum_band migrated to canonical atr_normalized_momentum
     # (StyleSnapshot's additive field, sourced from

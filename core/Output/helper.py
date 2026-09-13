@@ -14,21 +14,25 @@ def strip_nulls(obj):
     return obj
 
 # Central place to define theoretical max values with overrides
+# Fix #6AD — the per-mode "momentum" entries formerly here (default: 1.0,
+# scalping: 50.0, swing: 2000.0) were removed: momentum_pct/momentum_color
+# now source MOMENTUM_PCT_ATR_REFERENCE below instead (Fix #6AC), and the
+# default entry was already unreferenced before that (get_display_max()
+# is only ever called with mode "bias"/"scalping"/"swing", and the bias
+# path never read a momentum value at all). Confirmed zero remaining
+# consumers via repo-wide grep before removal.
 display_max_config = {
     "default": {
         "bias_score": 4.0,
         "strength": getattr(cfg, "strength_max", 10.0),
-        "score": 1.0,
-        "momentum": 1.0
+        "score": 1.0
     },
     "scalping": {
-        "momentum": 50.0
     },
     "swing": {
-        "momentum": 2000.0
     },
     "symbol_overrides": {
-        
+
     }
 }
 
@@ -37,13 +41,14 @@ display_max_config = {
 # maximum (atr_normalized_momentum itself is unclamped, see
 # MomentumEngine.py) -- just the point at which momentum_pct saturates to
 # +/-100%. Replaces the old per-mode display_max_config["scalping"/"swing"]
-# ["momentum"] (50.0/2000.0) split -- those were tuned against the legacy
-# raw, per-instrument-scale-dependent momentum score and required two
-# different constants for the same concept; a single canonical ATR
-# reference needs only one, shared by both scalping and swing. Kept as its
-# own named constant, distinct from MAX_MOMENTUM (Fix #6AA's dead scheme A)
-# and MOMENTUM_CONF_ATR_REFERENCE (Fix #6AB's momentum_conf) -- same
-# numeric value today, three separate presentation paths.
+# ["momentum"] (50.0/2000.0) split, removed by Fix #6AD -- those were tuned
+# against the legacy raw, per-instrument-scale-dependent momentum score and
+# required two different constants for the same concept; a single
+# canonical ATR reference needs only one, shared by both scalping and
+# swing. Kept as its own named constant, distinct from MAX_MOMENTUM
+# (Output.py's now fully-unused Fix #6AA constant, its dead scheme A
+# removed by Fix #6AD) and MOMENTUM_CONF_ATR_REFERENCE (Fix #6AB's
+# momentum_conf) -- same numeric value today, separate presentation paths.
 MOMENTUM_PCT_ATR_REFERENCE = 2.0
 
 

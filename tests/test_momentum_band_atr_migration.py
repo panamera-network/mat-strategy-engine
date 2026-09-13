@@ -15,7 +15,6 @@ from core.Output.Output import (
     _momentum_band,
     ATR_MOMENTUM_MODERATE_THRESHOLD,
     ATR_MOMENTUM_STRONG_THRESHOLD,
-    MAX_MOMENTUM,
 )
 
 
@@ -230,13 +229,17 @@ def test_normalize_snapshot_omits_band_key_when_field_absent():
 # Existing alignment/conviction/confidence values unchanged
 # ---------------------------------------------------------------------------
 
-def test_momentum_color_still_uses_legacy_value_and_max_momentum():
-    """momentum_color depends on raw magnitude independently of the band
-    (via MAX_MOMENTUM) -- confirmed by code inspection (Fix #6Z's own
-    scope note) and reconfirmed here: changing atr_normalized_momentum
-    must not change momentum_color for a fixed legacy momentum value."""
+def test_normalize_snapshot_no_longer_sets_momentum_color_dead_scheme_a_removed():
+    """At the time this fix (#6Z) landed, _normalize_snapshot() also set
+    snap_dict["momentum_color"] independently of momentum_band (via the
+    legacy raw `momentum` and MAX_MOMENTUM) -- that write was always
+    overwritten downstream by add_display_percentages() before reaching
+    any consumer (Fix #6AA/#6AC's live audits), and Fix #6AD removed it as
+    dead code. Reconfirmed here: momentum_band is unaffected by that
+    removal, and _normalize_snapshot() no longer produces a momentum_color
+    key at all -- helper.py's add_display_percentages() is now the only
+    place that sets it."""
     from core.Output.Output import _normalize_snapshot
-    from core.Output.helper import confidence_color
 
     class FakeSnap:
         def __init__(self, atr_norm):
@@ -244,15 +247,12 @@ def test_momentum_color_still_uses_legacy_value_and_max_momentum():
             self.atr_normalized_momentum = atr_norm
             self.demand = "neutral"
 
-    expected_color = confidence_color(abs(0.8) / MAX_MOMENTUM * 100)
-
     result_a = _normalize_snapshot(FakeSnap(atr_norm=0.1))
     result_b = _normalize_snapshot(FakeSnap(atr_norm=3.0))
 
-    assert result_a["momentum_color"] == expected_color
-    assert result_b["momentum_color"] == expected_color
-    assert result_a["momentum_color"] == result_b["momentum_color"]
-    # but the bands differ, proving they're independent
+    assert "momentum_color" not in result_a
+    assert "momentum_color" not in result_b
+    # bands still differ correctly, unaffected by the scheme A removal
     assert result_a["momentum_band"] != result_b["momentum_band"]
 
 
