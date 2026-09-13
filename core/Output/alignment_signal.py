@@ -30,16 +30,23 @@ def compute_alignment_signal(tf_snapshots: dict, mode: str) -> dict:
             breakdown[tf] = None
             continue
 
+        # Fix #6AF — momentum vote now sources canonical
+        # atr_normalized_momentum instead of the legacy raw StyleSnapshot
+        # .momentum (Fix #6AE's audit found the legacy +/-0.3 threshold on
+        # the raw price-scale field never fired for standard FX (0.0%
+        # activation) while firing on 86-94% of metals/crypto readings --
+        # a scale defect, not a real difference in momentum behavior). The
+        # legacy `momentum` field itself is no longer read here at all.
         if hasattr(snap, "direction"):
             direction = snap.direction
-            momentum = snap.momentum
+            atr_momentum = getattr(snap, "atr_normalized_momentum", None)
         elif isinstance(snap, dict):
             direction = snap.get("direction")
-            momentum = snap.get("momentum")
+            atr_momentum = snap.get("atr_normalized_momentum")
         else:
             snap = snap.__dict__.copy()
             direction = snap.get("direction")
-            momentum = snap.get("momentum")
+            atr_momentum = snap.get("atr_normalized_momentum")
 
         score = 0
         if direction in ["uptrend", "bullish"]:
@@ -47,10 +54,16 @@ def compute_alignment_signal(tf_snapshots: dict, mode: str) -> dict:
         elif direction in ["downtrend", "bearish"]:
             score -= 1
 
-        if momentum is not None:
-            if momentum > 0.3:
+        # Fix #6AF — +/-1.0 ATR is the "strong momentum" threshold locked
+        # by Fix #6Z's canonical bands (Fix #6AE's audit, Q7): strict >/<
+        # so exactly +/-1.0 ATR itself stays neutral, matching the prior
+        # strict-comparison convention. None (canonical value unavailable)
+        # casts no momentum vote at all -- never guessed as neutral-by-
+        # coincidence versus genuinely absent.
+        if atr_momentum is not None:
+            if atr_momentum > 1.0:
                 score += 1
-            elif momentum < -0.3:
+            elif atr_momentum < -1.0:
                 score -= 1
 
         # Fix #6G — zone interaction (legacy shift_confirmed/shift_direction,

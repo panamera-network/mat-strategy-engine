@@ -256,23 +256,31 @@ def test_normalize_snapshot_no_longer_sets_momentum_color_dead_scheme_a_removed(
     assert result_a["momentum_band"] != result_b["momentum_band"]
 
 
-def test_alignment_signal_unaffected_by_atr_normalized_momentum():
-    """alignment_signal.py must still read only .momentum (legacy) and
-    .direction/.shift_confirmed -- confirmed it never reads
-    atr_normalized_momentum at all."""
+def test_alignment_signal_momentum_vote_migrated_by_later_fix_6af():
+    """At the time this fix (#6Z) landed, alignment_signal.py read only
+    .momentum (legacy) and never atr_normalized_momentum -- Fix #6AF later
+    migrated the momentum vote itself to canonical atr_normalized_momentum
+    (+/-1.0 ATR threshold), per Fix #6AE's audit. This test now documents
+    that fact rather than asserting the old (superseded) exclusion; see
+    test_alignment_momentum_atr_migration.py for that migration's own
+    dedicated tests."""
     from core.Output.alignment_signal import compute_alignment_signal
 
-    snap_with_atr = {"direction": "neutral", "momentum": 0.0004,
-                      "shift_confirmed": False, "shift_direction": "Neutral",
-                      "atr_normalized_momentum": 1.32}
+    snap_with_strong_atr = {"direction": "neutral", "momentum": 0.0004,
+                             "shift_confirmed": False, "shift_direction": "Neutral",
+                             "atr_normalized_momentum": 1.32}
     snap_without_atr = {"direction": "neutral", "momentum": 0.0004,
                          "shift_confirmed": False, "shift_direction": "Neutral"}
 
-    result_with = compute_alignment_signal({"M15": snap_with_atr}, mode="scalping")
+    result_with = compute_alignment_signal({"M15": snap_with_strong_atr}, mode="scalping")
     result_without = compute_alignment_signal({"M15": snap_without_atr}, mode="scalping")
 
-    assert result_with["total_score"] == result_without["total_score"]
-    assert result_with["decision"] == result_without["decision"]
+    # A strong (>1.0 ATR) canonical value now DOES change the outcome vs.
+    # one that's absent entirely -- the opposite of this test's original
+    # (pre-#6AF) assertion.
+    assert result_with["total_score"] == 1.0
+    assert result_without["total_score"] == 0.0
+    assert result_with["total_score"] != result_without["total_score"]
 
 
 def test_conviction_unaffected_by_atr_normalized_momentum():
