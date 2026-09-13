@@ -51,11 +51,21 @@ class StrengthDiagnostic:
     def __repr__(self):
         return f"StrengthDiagnostic(strength={self.strength}, avg_body_ratio={self.avg_body_ratio}, momentum_slope={self.momentum_slope})"
 
+    @property
+    def body_dominance(self) -> float:
+        """Fix #6O — canonical name for avg_body_ratio (Fix #6M/#6N's audit
+        conclusion), raw [0,1] range, no ×10, no new formula. A read-only
+        alias of the same stored value — not a second computation, so it
+        can never drift from avg_body_ratio. avg_body_ratio remains the
+        legacy name, untouched."""
+        return self.avg_body_ratio
+
     def to_dict(self):
         return {
             "strength": self.strength,
             "avg_body_ratio": self.avg_body_ratio,
-            "momentum_slope": self.momentum_slope
+            "momentum_slope": self.momentum_slope,
+            "body_dominance": self.body_dominance,
         }
 
 
@@ -228,6 +238,16 @@ class StructureSnapshot:
     # established trend either way at break time, per Fix #6B's audit);
     # None only when there's no confirmed event at all.
     pre_break_trend: str | None = None
+
+    @property
+    def body_dominance(self) -> float:
+        """Fix #6O — canonical name for body_ratio (Fix #6M/#6N's audit
+        conclusion), raw [0,1] range, no ×10, no new formula. A read-only
+        alias of the same stored value (set from StrengthDiagnostic.
+        avg_body_ratio in StructureEngine.get_snapshot()) — not a second
+        computation, so it can never drift from body_ratio. body_ratio
+        remains the legacy name, untouched."""
+        return self.body_ratio
 
     def __post_init__(self):
         self.structure_type = self.detect_structure_label()

@@ -87,11 +87,17 @@ def _build_bias_ordered(bias_map: dict) -> OrderedDict:
         score_val = tf_data.get("bias_score")
         strength_diag = tf_data.get("strength_diagnostic")
         strength_val = strength_diag.strength if isinstance(strength_diag, StrengthDiagnostic) else None
+        # Fix #6O — canonical body_dominance, additive alongside the
+        # untouched legacy "strength" key above. Same underlying value as
+        # strength_diag.avg_body_ratio (see StrengthDiagnostic.body_dominance),
+        # raw [0,1] range, no new computation.
+        body_dominance_val = strength_diag.body_dominance if isinstance(strength_diag, StrengthDiagnostic) else None
 
         bias_ordered[tf] = {
             "label": tf_data.get("bias_label"),
             "score": score_val,
             "strength": strength_val,
+            "body_dominance": body_dominance_val,
         }
         if score_val is not None:
             pct = abs(score_val) / MAX_BIAS * 100
