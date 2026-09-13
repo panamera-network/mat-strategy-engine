@@ -131,6 +131,10 @@ class StructureEngine:
             origin_zone_timestamp=origin_zone.timestamp if origin_zone else None,
             origin_zone_top=origin_zone.top if origin_zone else None,
             origin_zone_bottom=origin_zone.bottom if origin_zone else None,
+            # Fix #6C — pre-break trend evidence. detect_structure_event()
+            # already guarantees this is None exactly when there's no
+            # confirmed event, same as broken_level/leg_origin_* above.
+            pre_break_trend=structure_event.get("pre_break_trend"),
         )
 
         snapshot.structure_type = structure_event["type"]

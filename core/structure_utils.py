@@ -83,10 +83,25 @@ def detect_structure_event(candles: List[CandleSnapshot], swing_highs: List[int]
     demand/supply zone origin (a different engine, a different, unrelated
     concept) and not a displacement-candle detector (a possible future,
     more expensive refinement, not this one). None when there's no
-    confirmed event."""
+    confirmed event.
+
+    Fix #6C — pre_break_trend (additive, no detection-formula change): the
+    `trend` value already computed below, exposed as-is — the two-swing
+    trend read BEFORE this break was evaluated, i.e. exactly what BOS/CHoCH
+    was decided against (Fix #6B's audit). "Neutral" is a real, meaningful
+    value here, not a missing-evidence placeholder: it means a break
+    occurred while no two-swing trend was established either way, which is
+    exactly the edge case where today's BOS label is a default/fallback
+    rather than a substantiated continuation claim (see Fix #6B Q2) — a
+    consumer that wants to tell that case apart from a "true" BOS needs
+    this field. None only when there is no confirmed event at all (same
+    convention as leg_origin_*/broken_level above) — pre_break_trend is
+    scoped to an actual break, so there is no "pre-break" moment to report
+    without one."""
     no_event = {
         "type": "None", "direction": "Neutral", "valid": False, "index": len(candles) - 1, "broken_level": None,
         "leg_origin_index": None, "leg_origin_timestamp": None, "leg_origin_price": None, "leg_origin_swing_label": None,
+        "pre_break_trend": None,
     }
     if not swing_highs or not swing_lows:
         return no_event
@@ -106,6 +121,7 @@ def detect_structure_event(candles: List[CandleSnapshot], swing_highs: List[int]
             "leg_origin_timestamp": str(candles[origin_index].timestamp),
             "leg_origin_price": last_swing_low,
             "leg_origin_swing_label": _last_swing_label(candles, swing_lows, is_high=False),
+            "pre_break_trend": trend,
         }
 
     if curr.close < last_swing_low:
@@ -117,6 +133,7 @@ def detect_structure_event(candles: List[CandleSnapshot], swing_highs: List[int]
             "leg_origin_timestamp": str(candles[origin_index].timestamp),
             "leg_origin_price": last_swing_high,
             "leg_origin_swing_label": _last_swing_label(candles, swing_highs, is_high=True),
+            "pre_break_trend": trend,
         }
 
     return no_event

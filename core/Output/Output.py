@@ -184,6 +184,11 @@ def _build_structure_extras(structure_map: dict) -> tuple:
             "origin_zone_timestamp": s.origin_zone_timestamp,
             "origin_zone_top": s.origin_zone_top,
             "origin_zone_bottom": s.origin_zone_bottom,
+            # Fix #6C — the two-swing trend read before this event's break
+            # was evaluated (see structure_utils.detect_structure_event()).
+            # Wiring only; the value itself is unchanged from what BOS/CHoCH
+            # was decided against.
+            "pre_break_trend": s.pre_break_trend,
         }
         for tf, s in structure_map.items()
         if s.structure_valid

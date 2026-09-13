@@ -222,6 +222,12 @@ class StructureSnapshot:
     origin_zone_timestamp: str | None = None
     origin_zone_top: float | None = None
     origin_zone_bottom: float | None = None
+    # Fix #6C — the two-swing trend read BEFORE this event's break was
+    # evaluated (see structure_utils.detect_structure_event()) — exactly
+    # what BOS/CHoCH was decided against. "Neutral" is a real value (no
+    # established trend either way at break time, per Fix #6B's audit);
+    # None only when there's no confirmed event at all.
+    pre_break_trend: str | None = None
 
     def __post_init__(self):
         self.structure_type = self.detect_structure_label()
