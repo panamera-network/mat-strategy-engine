@@ -412,6 +412,68 @@ def link_zone_to_leg_origin(
     return best_zone
 
 
+def derive_freshness_state(zone: SupplyDemandZone) -> str:
+    """Fix #5H2 — canonical freshness reasoning label, derived purely from
+    the existing freshness fields (no new state, no scoring): invalidated
+    (decisive failure) outranks mitigated (soft close-back-in), which
+    outranks touched (wick contact only, no qualifying close), which
+    outranks fresh (never touched). impulse_strength plays no role here —
+    per Fix #5D/#5H it remains creation-time context only, never a
+    freshness or quality signal."""
+    if zone.invalidated:
+        return "invalidated"
+    if zone.mitigated:
+        return "mitigated"
+    if zone.touch_count > 0:
+        return "touched"
+    return "fresh"
+
+
+def derive_structural_evidence(
+    zone: SupplyDemandZone,
+    origin_zone_type: Optional[str],
+    origin_zone_timestamp: Optional[str],
+    origin_zone_top: Optional[float],
+    origin_zone_bottom: Optional[float],
+) -> str:
+    """Fix #5H2 — canonical structural-evidence reasoning label. Current-
+    event semantics only — Fix #5H1's audit found no event history exists
+    (or is warranted yet), so "confirmed" here is always relative to the
+    CURRENT/latest structure event, never a historical claim.
+
+    confirmed_current_event: this exact zone IS the current origin_zone_*
+    link (Fix #5G1/#5G1A) — matched on type/timestamp/top/bottom, the same
+    minimal evidence StructureSnapshot carries (never the whole zone
+    object, so this is the only correct way to compare). origin_zone_type
+    is None whenever there is no confirmed link for the current event, so
+    no zone can match by accident when nothing is actually linked.
+    invalidated has no bearing on this label — a zone that has since
+    failed can still be the historically-correct origin of the leg it
+    produced (per link_zone_to_leg_origin()'s own design), so an
+    invalidated zone may still read confirmed_current_event.
+
+    supported: not the current origin link, but classify_zone() already
+    found structural relevance — "reversal" (near a confirmed swing) or
+    "continuation" (pattern-consistent within structure's coverage
+    window).
+
+    unconfirmed: neither of the above. This includes classification ==
+    "unknown", which Fix #5C established is an explicit "insufficient
+    evidence" fallback, not a negative verdict — unconfirmed here likewise
+    means "not (yet) evidenced", not "bad"."""
+    if (
+        origin_zone_type is not None
+        and zone.type == origin_zone_type
+        and zone.timestamp == origin_zone_timestamp
+        and zone.top == origin_zone_top
+        and zone.bottom == origin_zone_bottom
+    ):
+        return "confirmed_current_event"
+    if zone.classification in ("reversal", "continuation"):
+        return "supported"
+    return "unconfirmed"
+
+
 class DemandEngine:
     def __init__(self, candle_engine: CandleEngine):
         self.candle_engine = candle_engine

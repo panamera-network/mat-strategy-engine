@@ -9,7 +9,7 @@ from core.Output.diagnostic_models import cfg, BIAS_ORDER, SCALPING_ORDER, SWING
 from core.Output.health_log import build_symbol_health
 from core.Output.helper import add_display_percentages, confidence_color, strip_nulls
 from core.Output.swing_diag import enrich_swing_with_diagnostic
-from core.demand_engine import classify_zones
+from core.demand_engine import classify_zones, derive_freshness_state, derive_structural_evidence
 from core.SnapshotCache import snapshot_cache
 from core.StyleEngine import get_style_snapshot
 from core.core_models import StrengthDiagnostic
@@ -191,7 +191,7 @@ def _build_structure_extras(structure_map: dict) -> tuple:
     return snr_levels, order_blocks, fvg, swing_points, structure_events
 
 
-def _build_supply_demand_zones(symbol: str, demand_engine, cache=None, zones_map: dict = None) -> dict:
+def _build_supply_demand_zones(symbol: str, demand_engine, cache=None, zones_map: dict = None, structure_map: dict = None) -> dict:
     """Fix #4D3 — reuses the same request-scoped zones_map StructureEngine's
     context already consumed above, instead of calling
     demand_engine.get_zones() (a second detect_zones() run) again here.
@@ -205,11 +205,37 @@ def _build_supply_demand_zones(symbol: str, demand_engine, cache=None, zones_map
     verdict, not the unfired "unknown" default Fix #5B excluded this
     field for. A caller that supplies zones_map without classifying it
     first (or omits zones_map entirely) still gets a valid dict — the
-    classification would just honestly read "unknown"."""
+    classification would just honestly read "unknown".
+
+    Fix #5H2 — structural_evidence/freshness_state are attached per zone
+    here (wiring only; the reasoning rule itself lives in
+    core.demand_engine.derive_structural_evidence()/derive_freshness_state()).
+    structural_evidence needs the current event's origin_zone_* (from this
+    tf's StructureSnapshot, if any) to know which zone — if any — is the
+    current confirmed link; structure_map omitted (or no snapshot/no
+    confirmed link for a tf) behaves as "no current origin zone", so every
+    zone on that tf reads at most "supported"/"unconfirmed", never a forced
+    confirmation."""
     zones = {}
     for tf in BIAS_ORDER:
         tf_raw_zones = zones_map.get(tf, []) if zones_map is not None else demand_engine.get_zones(symbol, tf, cache=cache)
-        tf_zones = [asdict(z) for z in tf_raw_zones if z.valid]
+        structure = structure_map.get(tf) if structure_map else None
+        origin_type = structure.origin_zone_type if structure else None
+        origin_timestamp = structure.origin_zone_timestamp if structure else None
+        origin_top = structure.origin_zone_top if structure else None
+        origin_bottom = structure.origin_zone_bottom if structure else None
+
+        tf_zones = []
+        for z in tf_raw_zones:
+            if not z.valid:
+                continue
+            zone_dict = asdict(z)
+            zone_dict["structural_evidence"] = derive_structural_evidence(
+                z, origin_type, origin_timestamp, origin_top, origin_bottom
+            )
+            zone_dict["freshness_state"] = derive_freshness_state(z)
+            tf_zones.append(zone_dict)
+
         if tf_zones:
             zones[tf] = tf_zones
     return zones
@@ -312,7 +338,7 @@ def _build_symbol_snapshot(
     display_block["fvg"] = fvg
     display_block["swing_points"] = swing_points
     display_block["structure_events"] = structure_events
-    display_block["supply_demand_zones"] = _build_supply_demand_zones(symbol, demand_engine, cache=cache, zones_map=zones_map)
+    display_block["supply_demand_zones"] = _build_supply_demand_zones(symbol, demand_engine, cache=cache, zones_map=zones_map, structure_map=structure_map)
 
     # Cache for next pass (deltas, history, etc.)
     snapshot_cache.set(symbol, {
