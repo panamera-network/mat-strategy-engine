@@ -31,11 +31,30 @@ class BiasEngine:
             return self.structure_engine.get_snapshot(symbol, tf, cache=cache)
         return None
 
+    def _resolve_strength(self, candles: list[CandleSnapshot], structure_snapshot: Optional[StructureSnapshot]) -> StrengthDiagnostic:
+        """Fix #6L — canonical strength source: StructureEngine.get_snapshot()
+        already ran StrengthEngine.compute_strength() on its own 26-candle
+        FETCH_COUNT window (see StructureEngine.py) and stored the result on
+        strength/body_ratio/momentum_slope — reuse that exact result instead
+        of computing a second, independent StrengthDiagnostic on this
+        method's own (differently-sized) candle fetch. Only falls back to
+        an independent compute_strength() call when no structure_snapshot
+        is available at all (e.g. no structure_engine injected) — the same
+        territory evaluate_bias()'s own fallback already covers, untouched
+        here."""
+        if structure_snapshot is not None:
+            return StrengthDiagnostic(
+                strength=structure_snapshot.strength,
+                avg_body_ratio=structure_snapshot.body_ratio,
+                momentum_slope=structure_snapshot.momentum_slope,
+            )
+        return self.strength_engine.compute_strength(candles)
+
     def get_bias(self, symbol: str, tf: str, structure_snapshot: Optional[StructureSnapshot] = None, cache=None) -> BiasSnapshot:
         candles = self.candle_engine.get_snapshots(symbol, tf, cache=cache)
         structure_snapshot = self._resolve_structure(symbol, tf, structure_snapshot, cache=cache)
         bias_label, bias_score = self.evaluate_bias(candles, structure_snapshot=structure_snapshot)
-        strength = self.strength_engine.compute_strength(candles)
+        strength = self._resolve_strength(candles, structure_snapshot)
 
         return BiasSnapshot(
             symbol=symbol,
@@ -115,7 +134,7 @@ class BiasEngine:
             structure_snapshot = structure_map.get(tf) if structure_map else None
             structure_snapshot = self._resolve_structure(symbol, tf, structure_snapshot, cache=cache)
             bias_label, bias_score = self.evaluate_bias(candles, structure_snapshot=structure_snapshot)
-            strength = self.strength_engine.compute_strength(candles)
+            strength = self._resolve_strength(candles, structure_snapshot)
 
             bias_map[tf] = {
                 "bias_label": bias_label,
