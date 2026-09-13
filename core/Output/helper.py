@@ -32,6 +32,21 @@ display_max_config = {
     }
 }
 
+# Fix #6AC — presentation reference/cap for live momentum_pct/momentum_color
+# (scheme C, add_display_percentages() below), in ATR units. Not a physical
+# maximum (atr_normalized_momentum itself is unclamped, see
+# MomentumEngine.py) -- just the point at which momentum_pct saturates to
+# +/-100%. Replaces the old per-mode display_max_config["scalping"/"swing"]
+# ["momentum"] (50.0/2000.0) split -- those were tuned against the legacy
+# raw, per-instrument-scale-dependent momentum score and required two
+# different constants for the same concept; a single canonical ATR
+# reference needs only one, shared by both scalping and swing. Kept as its
+# own named constant, distinct from MAX_MOMENTUM (Fix #6AA's dead scheme A)
+# and MOMENTUM_CONF_ATR_REFERENCE (Fix #6AB's momentum_conf) -- same
+# numeric value today, three separate presentation paths.
+MOMENTUM_PCT_ATR_REFERENCE = 2.0
+
+
 def get_display_max(symbol: str, mode: str) -> Dict[str, float]:
     max_vals = dict(display_max_config["default"])
     if mode in display_max_config:
@@ -97,7 +112,13 @@ def add_display_percentages(symbol_block, symbol):
     for tf in SCALPING_ORDER:
         snap = symbol_block["scalping"].get(tf)
         if snap:
-            mpct = scale_to_pct(snap.get("momentum"), scalping_max["momentum"], -scalping_max["momentum"])
+            # Fix #6AC — momentum_pct/momentum_color now source canonical
+            # atr_normalized_momentum against a single shared ATR reference,
+            # not the legacy raw `momentum` scaled against a scalping-only
+            # max. Signed, unlike Fix #6AB's momentum_conf -- direction is
+            # this pair's whole display purpose (pct_to_color(directional=True)
+            # below is unchanged).
+            mpct = scale_to_pct(snap.get("atr_normalized_momentum"), MOMENTUM_PCT_ATR_REFERENCE, -MOMENTUM_PCT_ATR_REFERENCE)
             snap["momentum_pct"] = mpct
             snap["momentum_color"] = pct_to_color(mpct, directional=True)
 
@@ -109,7 +130,9 @@ def add_display_percentages(symbol_block, symbol):
     for tf in SWING_ORDER:
         snap = symbol_block["swing"].get(tf)
         if snap:
-            mpct = scale_to_pct(snap.get("momentum"), swing_max["momentum"], -swing_max["momentum"])
+            # Fix #6AC — same canonical ATR reference as scalping above; no
+            # separate scalping/swing momentum scale any more.
+            mpct = scale_to_pct(snap.get("atr_normalized_momentum"), MOMENTUM_PCT_ATR_REFERENCE, -MOMENTUM_PCT_ATR_REFERENCE)
             snap["momentum_pct"] = mpct
             snap["momentum_color"] = pct_to_color(mpct, directional=True)
 
