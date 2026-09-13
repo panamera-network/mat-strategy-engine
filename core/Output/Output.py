@@ -34,6 +34,15 @@ ALIGNMENT_HISTORY_LIMIT = 10
 # other callers and are removed rather than left dead.
 ATR_MOMENTUM_MODERATE_THRESHOLD = 0.5
 ATR_MOMENTUM_STRONG_THRESHOLD = 1.0
+# Fix #6AB — presentation reference/cap for momentum_conf, in ATR units.
+# Not a physical maximum (atr_normalized_momentum itself is unclamped, see
+# MomentumEngine.py) -- just the point at which momentum_conf saturates to
+# 100%. Chosen because it extends Fix #6Z's weak/moderate/strong ATR
+# landmarks (0.5/1.0) by one more step, landing exactly on
+# confidence_color's existing 25/50/75 tier boundaries at 0.5/1.0/1.5 ATR
+# (Fix #6AA's audit, Q6). Deliberately separate from MAX_MOMENTUM, which
+# still governs the untouched legacy momentum_color/momentum_pct chain.
+MOMENTUM_CONF_ATR_REFERENCE = 2.0
 
 
 def _momentum_band(momentum: float | None) -> str | None:
@@ -137,10 +146,21 @@ def _compute_signal_confidence(bias_ordered: dict, scalping_snapshots: dict, sca
     bias_scores = [v["score"] for v in bias_ordered.values() if v.get("score") is not None]
     bias_conf = round(sum(abs(s) / MAX_BIAS * 100 for s in bias_scores) / len(bias_scores), 1) if bias_scores else 0
 
+    # Fix #6AB — momentum_conf now sources canonical atr_normalized_momentum
+    # instead of the legacy raw StyleSnapshot.momentum (Fix #6AA's audit
+    # found the legacy numerator produced up to 932,857% under the old
+    # formula, e.g. BTCUSD_i's signal_health.score_pct reading 733%).
+    # MOMENTUM_CONF_ATR_REFERENCE is a presentation reference/cap, not the
+    # physical maximum atr_normalized_momentum can reach (it stays
+    # unclamped elsewhere, per Fix #6V) -- each per-tf pct is clamped to
+    # 100 individually so one extreme reading can't drag the average past
+    # 100 on its own. Deliberately a separate constant from MAX_MOMENTUM,
+    # which still governs the untouched legacy momentum_color/momentum_pct
+    # chain (Fix #6AA's scheme A/C).
     mom_vals = [
-        abs(scalping_snapshots[tf]["momentum"]) / MAX_MOMENTUM * 100
+        min(abs(scalping_snapshots[tf]["atr_normalized_momentum"]) / MOMENTUM_CONF_ATR_REFERENCE * 100, 100.0)
         for tf in SCALPING_ORDER
-        if scalping_snapshots.get(tf, {}).get("momentum") is not None
+        if scalping_snapshots.get(tf, {}).get("atr_normalized_momentum") is not None
     ]
     momentum_conf = round(sum(mom_vals) / len(mom_vals), 1) if mom_vals else 0
 
