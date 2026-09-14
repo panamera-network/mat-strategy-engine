@@ -371,9 +371,17 @@ def test_output_schema_unchanged():
     )
     assert "error" not in out[symbol]
     block = out[symbol]
+    # Fix #6AZ — "entry_suggestions" removed from this set: Fix #6AY's audit
+    # found it was never actually part of any committed output contract.
+    # It was included here from the start (this test has only ever had one
+    # commit, cc4add4/#6AO) because the ambient working tree at the time
+    # already had the uncommitted EntrySuggestionEngine wiring applied to
+    # Output.py -- but that wiring itself was never part of #6AO's own
+    # commit, nor any commit since. No replacement key added; the schema
+    # below reflects only keys actually guaranteed by committed code.
     expected_top_keys = {
         "last_updated", "bias", "scalping", "swing", "health", "signal_health",
-        "strategy_signals", "entry_suggestions", "snr_levels", "order_blocks",
+        "strategy_signals", "snr_levels", "order_blocks",
         "fvg", "swing_points", "structure_events", "momentum_evidence", "supply_demand_zones",
     }
     assert expected_top_keys.issubset(set(block.keys()))
