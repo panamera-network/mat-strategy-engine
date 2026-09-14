@@ -177,13 +177,20 @@ def build_alignment_summary(breakdown: dict, mode: str, decision: str, confidenc
 
 def compute_signal_health(bias_conf: float, momentum_conf: float, align_conf: float) -> dict:
     avg_conf = round((bias_conf + momentum_conf + align_conf) / 3, 1)
+    # Fix #6BG — label wording made direction-neutral. avg_conf is built
+    # entirely from abs()-valued components (bias_conf/momentum_conf/
+    # align_conf all use abs()), so it carries no sign at all -- a strongly
+    # bearish reading produced the exact same score as a strongly bullish
+    # one, but the old label ("Strong Long Bias") implied a direction the
+    # score never determines. Thresholds (75/50/25) and the score itself
+    # are unchanged; only the wording is corrected to not claim a direction.
     return {
         "score_pct": avg_conf,
         "color": confidence_color(avg_conf),
         "label": (
-            "Strong Long Bias" if avg_conf >= 75 else
-            "Moderate Bias" if avg_conf >= 50 else
-            "Weak Bias" if avg_conf >= 25 else
-            "No Clear Bias"
+            "Strong Signal" if avg_conf >= 75 else
+            "Moderate Signal" if avg_conf >= 50 else
+            "Weak Signal" if avg_conf >= 25 else
+            "No Clear Signal"
         )
     }
