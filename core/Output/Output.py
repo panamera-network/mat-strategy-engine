@@ -7,7 +7,7 @@ from core.Output.alignment_signal import compute_alignment_signal, compute_signa
 from core.Output.build_scalping import build_scalping_diagnostic
 from core.Output.diagnostic_models import cfg, BIAS_ORDER, SCALPING_ORDER, SWING_ORDER
 from core.Output.health_log import build_symbol_health
-from core.Output.helper import add_display_percentages, confidence_color, strip_nulls
+from core.Output.helper import add_display_percentages, strip_nulls
 from core.Output.swing_diag import enrich_swing_with_diagnostic
 from core.demand_engine import classify_zones, derive_freshness_state, derive_structural_evidence
 from core.SnapshotCache import snapshot_cache
@@ -74,13 +74,18 @@ def _normalize_snapshot(snap) -> dict:
     if "demand" in snap_dict:
         snap_dict["zone"] = snap_dict.pop("demand")
 
-    checks = snap_dict.get("checks")
-    if checks and "demand_supports" in checks:
-        checks["zone_supports"] = checks.pop("demand_supports")
-
-    breakdown = snap_dict.get("conviction_breakdown")
-    if breakdown and "demand" in breakdown:
-        breakdown["zone_score"] = breakdown.pop("demand")
+    # Fix #6BM — the checks["demand_supports"]->"zone_supports" and
+    # conviction_breakdown["demand"]->"zone_score" rename branches that used
+    # to live here were removed: Fix #6BL's audit confirmed both were
+    # unreachable dead code. _normalize_snapshot() only ever runs on a raw
+    # per-tf StyleSnapshot dict (asdict(StyleSnapshot)), which has no
+    # "checks" field at all (that key only exists inside the separate
+    # "diagnostic" node, which never passes through this function); and
+    # compute_conviction() (core_models.py) already names its zone/demand
+    # term "zone_score" directly at the source for both modes, so
+    # conviction_breakdown never contains a "demand" key to rename. Neither
+    # branch ever fired in production — confirmed by tracing every call
+    # site, not by behavior change here.
 
     if "momentum" in snap_dict:
         # Fix #6AD — this block used to also set snap_dict["momentum_color"]
@@ -134,9 +139,13 @@ def _build_bias_ordered(bias_map: dict) -> OrderedDict:
             "strength": strength_val,
             "body_dominance": body_dominance_val,
         }
-        if score_val is not None:
-            pct = abs(score_val) / MAX_BIAS * 100
-            bias_ordered[tf]["score_color"] = confidence_color(pct)
+        # Fix #6BM — the score_color = confidence_color(pct) computation
+        # that used to live here was removed: Fix #6BL's audit confirmed it
+        # was always overwritten by add_display_percentages() (helper.py)
+        # later in the same request, before this value ever reached a
+        # consumer — the same dead pattern Fix #6AD already found and
+        # removed once for momentum_color. The final score_color a caller
+        # actually sees is produced exclusively by add_display_percentages().
     return bias_ordered
 
 
