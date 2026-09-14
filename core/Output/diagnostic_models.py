@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 # ---------- Config (tune via DI or env) ----------
 @dataclass
@@ -21,8 +21,11 @@ class ScalpCfg:
     # "exclude negligible/noise momentum", not "require strong momentum",
     # so this is the smallest already-established canonical boundary that
     # matches that intent. t_momentum_min itself is left defined and
-    # unchanged (still used by diagnostic_models.py's own unrelated,
-    # already-uncalled enrich_scalping_with_cascade()) for compatibility.
+    # unchanged -- still read (display-only, not for gating) by
+    # build_scalping.py's and swing_diag.py's own `thresholds` output.
+    # Fix #6BS — the sole live caller of this constant for actual gating,
+    # diagnostic_models.py's own orphan enrich_scalping_with_cascade()
+    # (dead code, confirmed zero callers by Fix #6BR's audit), was deleted.
     t_momentum_min_atr: float = 0.5
 
 
@@ -66,165 +69,3 @@ def normalize_struct_label(lbl: Optional[str]) -> str:
     if lbl.lower() == "neutral":
         return "Neutral"
     return lbl
-
-# ---------- Core enrichment ----------
-def enrich_scalping_with_cascade(
-    symbol: str,
-    scalping_map: Dict[str, Any],               # e.g., M1/M5/M15/M30 StyleSnapshot dicts
-    bias_map: Dict[str, Dict[str, Any]],        # per-TF: {label, score, strength}
-    prev_bias_map: Optional[Dict[str, Dict[str, Any]]] = None,
-    cfg: Optional[ScalpCfg] = None
-) -> Dict[str, Any]:
-    cfg = cfg or ScalpCfg()
-
-    # Pull current bias + strength from map
-    b1, b5, b15 = bias_map.get("M1", {}), bias_map.get("M5", {}), bias_map.get("M15", {})
-    s1, s5 = get(b1, "strength", 0.0), get(b5, "strength", 0.0)
-
-    # Previous bias map for flip detection (optional)
-    pb5 = get(prev_bias_map.get("M5", {}), "label", None) if prev_bias_map else None
-
-    # From scalping snapshots
-    m1_snap = scalping_map.get("M1", {}) or {}
-    m5_snap = scalping_map.get("M5", {}) or {}
-    m15_snap = scalping_map.get("M15", {}) or {}
-
-    # Momentum (scaled) — if your values are tiny deltas, consider pre-scaling before this step
-    m1_mom = float(get(m1_snap, "momentum", 0.0))
-    m5_mom = float(get(m5_snap, "momentum", 0.0))
-
-    # Structure/shift/demand/suppression (M5-centric for execution)
-    st5 = normalize_struct_label(get(m5_snap, "structure_label", "None"))
-    sh5 = bool(get(m5_snap, "shift_confirmed", False))
-    dm5 = (get(m5_snap, "demand", "neutral") or "").lower()
-    sup1 = bool(get(m1_snap, "suppression", False))
-    sup5 = bool(get(m5_snap, "suppression", False))
-
-    # Bias labels
-    l1, l5, l15 = get(b1, "label", "neutral"), get(b5, "label", "neutral"), get(b15, "label", "neutral")
-
-    # Checks (atoms)
-    checks = {
-        "bias_m1_up": label_up(l1),
-        "bias_m5_up": label_up(l5),
-        "bias_m15_neutral_or_up": label_neutral_or_up(l15),
-        "m5_flip_up_on_close": flipped_up(pb5, l5),
-        "m1_strength_ok": s1 >= cfg.t_strength_seed,
-        "m5_strength_rising": (s5 - (get(prev_bias_map.get("M5", {}), "strength", s5) if prev_bias_map else s5)) >= cfg.t_strength_rising_delta,
-        "momentum_ok": (m1_mom >= cfg.t_momentum_min) and (m5_mom >= cfg.t_momentum_min),
-        # Fix #6E — structure_ok now means a real confirmed BOS/CHoCH only
-        # (see build_scalping.py's comment for the full rationale).
-        # NOTE: enrich_scalping_with_cascade() has no callers anywhere in
-        # this repo (confirmed via repo-wide search) — fixed here anyway
-        # for consistency with the other two diagnostic builders, rather
-        # than leaving the same bad pattern in place.
-        "structure_ok": (st5 in {"BOS", "CHOCH"}),
-        "shift_ok": sh5,
-        # Fix #6E — canonical name for the same zone-touch signal as
-        # shift_ok above (kept for compatibility); reads the canonical
-        # zone_interaction field (Fix #6D) via the file's existing hybrid
-        # dict/object get() helper. Additive only — not part of
-        # cascade_score's explicit list below, so it cannot change that
-        # score.
-        "zone_interaction_ok": bool(get(m5_snap, "zone_interaction", sh5)),
-        "demand_supports": dm5 in {"demand", "strong buy"},
-        "suppression": sup1 or sup5
-    }
-
-    # Stage + action resolution (M5-centric)
-    reasons = []
-    if checks["suppression"]:
-        stage, action = "Invalidate", "Invalidate"
-        reasons.append("Suppression active")
-    elif checks["m5_flip_up_on_close"] and checks["m1_strength_ok"]:
-        stage, action = "Confirm", "Alert"
-        reasons += ["M5 flipped up", "M1 strength supports"]
-    elif checks["bias_m1_up"] and checks["bias_m5_up"] and checks["bias_m15_neutral_or_up"]:
-        stage, action = "Align", "Prepare"
-        reasons += ["M1/M5 aligned", "M15 not against"]
-    else:
-        if checks["bias_m1_up"] and checks["m1_strength_ok"]:
-            stage, action = "Seed", "Watch"
-            reasons += ["M1 up with strength"]
-        else:
-            stage, action = "Seed", "Watch"
-            reasons += ["Waiting for M1 seed"]
-
-    # Escalate if validated
-    if stage in {"Confirm", "Align"} and checks["momentum_ok"] and checks["structure_ok"]:
-        stage, action = "Validate", "Enter"
-        reasons += ["Momentum ok", f"Structure ok ({st5})"]
-        if checks["shift_ok"]:
-            reasons += ["Shift confirmed"]
-
-    # Cascade readiness score (0..1)
-    active_flags = [
-        checks["bias_m1_up"],
-        checks["bias_m5_up"],
-        checks["bias_m15_neutral_or_up"],
-        checks["m5_flip_up_on_close"],
-        checks["m1_strength_ok"],
-        checks["m5_strength_rising"],
-        checks["momentum_ok"],
-        checks["structure_ok"],
-        checks["shift_ok"],
-        checks["demand_supports"],
-    ]
-    cascade_score = round(sum(1.0 for f in active_flags if f) / len(active_flags), 2)
-
-    # Alignment summary
-    alignment = f"M1:{l1} M5:{l5} M15:{l15}"
-
-    # Swing hint from H1
-    h1 = bias_map.get("H1", {})
-    h1_label = get(h1, "label", "neutral")
-    h1_strength = float(get(h1, "strength", 0.0))
-
-    if label_up(h1_label) and h1_strength >= cfg.swing_support_strength:
-        swing_hint = "Swing supports long"
-        swing_supports_scalping = True
-    elif h1_label.lower() == "neutral":
-        swing_hint = "Swing neutral — likely a pullback continuation"
-        swing_supports_scalping = False
-    else:
-        swing_hint = "Swing against — manage as pullback"
-        swing_supports_scalping = False
-
-    thresholds = {
-        "t_strength_seed": cfg.t_strength_seed,
-        "t_strength_rising_delta": cfg.t_strength_rising_delta,
-        "t_momentum_min": cfg.t_momentum_min,
-        "t_bias_abs_min": cfg.t_bias_abs_min,
-        "swing_support_strength": cfg.swing_support_strength,
-    }
-
-    node = {
-        "stage": stage,
-        "action": action,
-        "reasons": reasons,
-        "alignment": alignment,
-        "cascade_score": cascade_score,
-        "thresholds": thresholds,
-        "checks": checks,
-        "timing": {  # placeholder: wire your own bar-age/timestamp deltas if you log flips
-            "m5_last_flip_bars": None
-        },
-        "risk": "High" if checks["suppression"] else ("Low" if cascade_score >= 0.7 else "Medium"),
-        "swing_hint": swing_hint,
-        "swing_supports_scalping": swing_supports_scalping,
-        "version": "scalp_cascade_v1"
-    }
-
-    # Attach to each scalping TF (primary logic M5; mirrored node elsewhere for transparency)
-    out = {}
-    for tf, snap in scalping_map.items():
-        # non-destructive copy for dict or object-like
-        if isinstance(snap, dict):
-            merged = {**snap, "diagnostic": node}
-        else:
-            # object: attach attribute
-            setattr(snap, "diagnostic", node)
-            merged = snap
-        out[tf] = merged
-
-    return out
