@@ -13,6 +13,19 @@
    structure_label raw with no normalization and produces the identical
    result.
 
+Fix #6BO — this file originally asserted StructureSnapshot.engulfing_sequence
+must exist. That field turned out to belong to separate, still-uncommitted
+ambient WIP (leg_origin/origin_zone/pre_break_trend-adjacent structure work),
+not to anything Fix #6BN's own commit added or depends on. Asserting its
+existence made this test file fail on a fresh checkout of committed history
+(or any environment without that unrelated WIP applied) -- a false regression
+signal for a commit that never touched StructureSnapshot at all. The
+assertion was rewritten to be conditional: it checks the field's default only
+when the field happens to be present, and asserts nothing otherwise. Fix #6BN
+itself never added, removed, or depends on StructureSnapshot.engulfing_sequence
+-- see core/core_models.py and core/Output/swing_diag.py, both outside this
+fix's scope.
+
 Run in isolation (the rest of /tests is broken on unrelated pre-existing
 imports -- see CLAUDE.md):
     pytest tests/test_fix_6bn_dead_field_and_inert_normalization.py -v
@@ -34,10 +47,19 @@ def test_style_snapshot_has_no_engulfing_sequence_field():
     assert "engulfing_sequence" not in field_names
 
 
-def test_structure_snapshot_still_has_engulfing_sequence_field_unchanged():
+def test_structure_snapshot_engulfing_sequence_untouched_if_present():
+    """StructureSnapshot.engulfing_sequence belongs to separate, currently
+    still-uncommitted ambient WIP -- not something Fix #6BN added, removed,
+    or depends on. This must never require the field to exist (that would
+    make this regression guard depend on unrelated uncommitted work, which
+    is exactly what broke it before Fix #6BO). When the field IS present
+    (e.g. in the current working-tree/WIP environment), confirm Fix #6BN
+    left its default untouched; when it is absent (e.g. a fresh checkout
+    of committed history without that unrelated WIP), there is nothing to
+    assert -- and that is the correct, passing outcome."""
     fields_by_name = {f.name: f for f in dataclasses.fields(StructureSnapshot)}
-    assert "engulfing_sequence" in fields_by_name
-    assert fields_by_name["engulfing_sequence"].default is None
+    if "engulfing_sequence" in fields_by_name:
+        assert fields_by_name["engulfing_sequence"].default is None
 
 
 def test_style_snapshot_constructs_fine_without_engulfing_sequence_kwarg():
