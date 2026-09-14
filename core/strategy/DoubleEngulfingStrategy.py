@@ -1,5 +1,5 @@
 from typing import Dict, Optional
-from core.strategy.strategy_models import Strategy, StrategySnapshot, price_from_snapshot
+from core.strategy.strategy_models import Strategy, StrategySnapshot, price_from_snapshot, strategy_momentum_confidence
 
 ACTIVE_TFS = ["M5", "M15", "H1", "H4", "D1"]
 
@@ -32,13 +32,19 @@ class DoubleEngulfingStrategy(Strategy):
         direction, reason, full_bonus = scenario
         wick_extension = snapshot.engulfing_strength == "Strong"
         bonus = full_bonus if wick_extension else 0.0
+        # Fix #6AV — momentum ingredient migrated to the canonical, signed,
+        # direction-agreement-gated helper (Fix #6AU); `direction` here is
+        # the already-resolved "long"/"short" value from the scenario table
+        # above, not a second/independent direction. The wick-extension
+        # bonus and cap above are unchanged.
+        base_confidence = strategy_momentum_confidence(snapshot.atr_normalized_momentum, direction)
 
         return {
             "symbol": snapshot.symbol,
             "timeframe": snapshot.timeframe,
             "direction": direction,
             "reason": reason,
-            "confidence": min(snapshot.momentum + bonus, 1.0),
+            "confidence": min(base_confidence + bonus, 1.0),
             "trigger": "engulfing",
             "timestamp": snapshot.timestamp,
             "price": price_from_snapshot(snapshot)

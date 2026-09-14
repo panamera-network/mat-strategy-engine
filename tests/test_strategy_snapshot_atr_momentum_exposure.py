@@ -186,13 +186,14 @@ def test_context_snapshots_also_backward_compatible():
 # ---------------------------------------------------------------------------
 
 def test_no_live_plugin_reads_new_field_yet():
-    """Confirms Fix #6AR's audit is still accurate post-#6AS: none of the
-    7 live plugin source files reference atr_normalized_momentum."""
+    """Fix #6AR's audit found none of the 7 live plugins read this field.
+    Fix #6AV later migrated the 4 composite plugins (BiasContinuation*/
+    DoubleEngulfing/ZoneContinuation) to read it via the canonical helper --
+    updated here to check only the 3 raw-confidence plugins Fix #6AV
+    deliberately left untouched, still pending their own migration."""
     import pathlib
     plugin_dir = pathlib.Path("core/strategy")
     plugin_files = [
-        "BiasContinuationScalpingStrategy.py", "BiasContinuationSwingStrategy.py",
-        "DoubleEngulfingStrategy.py", "ZoneContinuationStrategy.py",
         "ScalpingBiasCascade.py", "GroupedLastCandleBiasStrategy.py",
         "LastCandleBiasStrategy.py",
     ]
@@ -204,27 +205,44 @@ def test_no_live_plugin_reads_new_field_yet():
 def test_strategy_signal_output_identical_with_and_without_new_field():
     """Same structure snapshot, only difference being atr_normalized_momentum
     present vs absent -- the resulting Strategy signal (or lack of one) must
-    be byte-identical either way, since no plugin reads it."""
-    from core.strategy.BiasContinuationScalpingStrategy import BiasContinuationScalpingStrategy
+    be byte-identical either way, for a plugin that doesn't read it.
 
-    def make_snap(atr):
+    Fix #6AV migrated BiasContinuationScalpingStrategy (this test's original
+    example) to read the new field via the canonical helper, so its output
+    now legitimately differs with/without it -- that plugin's own dedicated
+    coverage lives in test_composite_strategy_momentum_confidence_migration.py.
+    Swapped to LastCandleBiasStrategy, one of the 3 raw-confidence plugins
+    Fix #6AV deliberately left untouched, to keep testing the same
+    invariant this test was written for."""
+    from core.strategy.LastCandleBiasStrategy import LastCandleBiasStrategy
+
+    def make_event(atr):
         return StrategySnapshot(
-            symbol="T", timeframe="M5", bias="Bullish", momentum=5.0, strength=5.0,
+            symbol="T", timeframe="D1", bias="Bullish", momentum=5.0, strength=5.0,
+            suppression=False, suppression_reason="",
+            structure_type="BOS", structure_direction="Bullish", structure_valid=True,
+            context_zone="demand", context_level=1.0, timestamp=datetime.now(timezone.utc),
+            is_last_bias_candle=True, atr_normalized_momentum=atr,
+        )
+
+    def make_shift(atr):
+        return StrategySnapshot(
+            symbol="T", timeframe="H1", bias="Bullish", momentum=5.0, strength=5.0,
             suppression=False, suppression_reason="",
             structure_type="BOS", structure_direction="Bullish", structure_valid=True,
             context_zone="demand", context_level=1.0, timestamp=datetime.now(timezone.utc),
             atr_normalized_momentum=atr,
         )
 
-    strat = BiasContinuationScalpingStrategy()
-    anchor = make_snap(None)
-    context = {"T_H1": anchor, "T_H4": anchor}
+    strat = LastCandleBiasStrategy()
 
-    snap_without = make_snap(None)
-    snap_with = make_snap(2.5)
+    event_without, shift_without = make_event(None), make_shift(None)
+    context_without = {"T_D1": event_without, "T_H1": shift_without}
+    event_with, shift_with = make_event(2.5), make_shift(2.5)
+    context_with = {"T_D1": event_with, "T_H1": shift_with}
 
-    result_without = strat.react(snap_without, context)
-    result_with = strat.react(snap_with, context)
+    result_without = strat.react(event_without, context_without)
+    result_with = strat.react(event_with, context_with)
     assert result_without == result_with
 
 

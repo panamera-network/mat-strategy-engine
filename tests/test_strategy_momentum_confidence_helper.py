@@ -154,10 +154,12 @@ def test_expected_direction_is_not_optional():
 
 
 def test_no_live_plugin_calls_the_new_helper_yet():
+    """Fix #6AV later migrated the 4 composite plugins (BiasContinuation*/
+    DoubleEngulfing/ZoneContinuation) to call this helper -- updated here to
+    check only the 3 raw-confidence plugins Fix #6AV deliberately left
+    untouched, still pending their own migration."""
     plugin_dir = pathlib.Path("core/strategy")
     plugin_files = [
-        "BiasContinuationScalpingStrategy.py", "BiasContinuationSwingStrategy.py",
-        "DoubleEngulfingStrategy.py", "ZoneContinuationStrategy.py",
         "ScalpingBiasCascade.py", "GroupedLastCandleBiasStrategy.py",
         "LastCandleBiasStrategy.py",
     ]

@@ -1,5 +1,5 @@
 from typing import Dict, Optional
-from core.strategy.strategy_models import Strategy, StrategySnapshot, price_from_snapshot
+from core.strategy.strategy_models import Strategy, StrategySnapshot, price_from_snapshot, strategy_momentum_confidence
 
 
 class ZoneContinuationStrategy(Strategy):
@@ -27,12 +27,17 @@ class ZoneContinuationStrategy(Strategy):
             direction = "long" if snapshot.structure_direction == "Bullish" else "short"
             zone_snap = h1 if h1.context_zone in ["demand", "supply"] else h4
             zone_source = zone_snap.context_zone
+            # Fix #6AV — momentum ingredient migrated to the canonical,
+            # signed, direction-agreement-gated helper (Fix #6AU);
+            # `direction` here is the already-resolved "long"/"short" value
+            # from structure_direction above, not a second/independent
+            # direction.
             return {
                 "symbol": symbol,
                 "timeframe": snapshot.timeframe,
                 "direction": direction,
                 "reason": f"Zone continuation from {zone_source}",
-                "confidence": snapshot.momentum,
+                "confidence": strategy_momentum_confidence(snapshot.atr_normalized_momentum, direction),
                 "trigger": snapshot.structure_type,
                 "timestamp": snapshot.timestamp,
                 "price": price_from_snapshot(zone_snap)
