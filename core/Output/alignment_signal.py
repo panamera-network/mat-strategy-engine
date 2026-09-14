@@ -176,14 +176,28 @@ def build_alignment_summary(breakdown: dict, mode: str, decision: str, confidenc
 
 
 def compute_signal_health(bias_conf: float, momentum_conf: float, align_conf: float) -> dict:
-    avg_conf = round((bias_conf + momentum_conf + align_conf) / 3, 1)
+    # Fix #6BI — align_conf removed from the average. Fix #6BH's audit
+    # found it strongly duplicates momentum_conf specifically (0.825
+    # correlation; 68% of align_conf's own variance already explained by
+    # a linear combination of bias_conf+momentum_conf), so averaging it in
+    # as an equal third pillar was effectively double-weighting momentum
+    # evidence relative to bias evidence, not adding an independent
+    # "agreement" dimension. align_conf is still accepted as a parameter
+    # here (call-site compatibility) but is deliberately not read -- it no
+    # longer affects avg_conf at all. Nothing about align_conf's own
+    # computation changes, and its value remains fully, independently
+    # published exactly as before via alignment_signal.confidence_pct in
+    # the scalping/swing blocks (Output.py) -- this fix only removes it
+    # from this one composite average.
+    avg_conf = round((bias_conf + momentum_conf) / 2, 1)
     # Fix #6BG — label wording made direction-neutral. avg_conf is built
-    # entirely from abs()-valued components (bias_conf/momentum_conf/
-    # align_conf all use abs()), so it carries no sign at all -- a strongly
-    # bearish reading produced the exact same score as a strongly bullish
-    # one, but the old label ("Strong Long Bias") implied a direction the
-    # score never determines. Thresholds (75/50/25) and the score itself
-    # are unchanged; only the wording is corrected to not claim a direction.
+    # entirely from abs()-valued components (bias_conf/momentum_conf both
+    # use abs()), so it carries no sign at all -- a strongly bearish
+    # reading produces the exact same score as a strongly bullish one, but
+    # the old label ("Strong Long Bias") implied a direction the score
+    # never determines. Thresholds (75/50/25) and the score itself are
+    # unchanged here; only the wording was corrected to not claim a
+    # direction.
     return {
         "score_pct": avg_conf,
         "color": confidence_color(avg_conf),

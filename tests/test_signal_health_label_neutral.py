@@ -78,9 +78,17 @@ def test_threshold_boundaries_unchanged():
 # just stops mislabeling it as directional.
 # ---------------------------------------------------------------------------
 
-def test_score_pct_formula_unchanged():
+def test_score_pct_formula_unchanged_at_time_of_this_fix():
+    """At the time Fix #6BG landed, compute_signal_health() still averaged
+    all 3 pillars (bias_conf + momentum_conf + align_conf) -- this fix only
+    touched label wording. Fix #6BI later dropped align_conf from the
+    average (Fix #6BH's audit: it strongly duplicated momentum_conf), so
+    this assertion is updated to the current 2-pillar formula; the label-
+    wording behavior this test file actually targets is unaffected either
+    way -- see test_signal_health_two_pillar.py for #6BI's own dedicated
+    formula coverage."""
     health = compute_signal_health(10.0, 20.0, 30.0)
-    assert health["score_pct"] == round((10.0 + 20.0 + 30.0) / 3, 1)
+    assert health["score_pct"] == round((10.0 + 20.0) / 2, 1)
 
 
 def test_bearish_and_bullish_mirrored_inputs_produce_same_neutral_label():

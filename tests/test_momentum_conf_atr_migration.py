@@ -171,21 +171,28 @@ def test_signal_health_no_longer_explodes_from_extreme_momentum_conf():
     # Reproduces Fix #6AA's live BTCUSD_i finding in miniature: before this
     # fix, an extreme legacy momentum value alone could push
     # signal_health.score_pct to 733%. With momentum_conf now capped at
-    # 100, and bias_conf/align_conf also naturally <=100, the average can
-    # never exceed 100.
+    # 100, and bias_conf also naturally <=100, the average can never exceed
+    # 100. Fix #6BI later dropped align_conf from this average entirely
+    # (Fix #6BH's audit: it strongly duplicated momentum_conf) -- the
+    # align_conf argument is still accepted here but no longer affects the
+    # result, so the value passed for it (60.0) is deliberately irrelevant.
     bias_conf = 50.0
     momentum_conf = 100.0  # the new, capped ceiling -- was 92685700%-scale pre-fix for crypto
     align_conf = 60.0
     health = compute_signal_health(bias_conf, momentum_conf, align_conf)
     assert health["score_pct"] <= 100.0
-    assert health["score_pct"] == round((50.0 + 100.0 + 60.0) / 3, 1)
+    assert health["score_pct"] == round((50.0 + 100.0) / 2, 1)
 
 
-def test_signal_health_formula_itself_unchanged():
-    # compute_signal_health() itself is explicitly out of scope for this
-    # fix -- confirm it's still a bare unweighted average of the 3 inputs.
+def test_signal_health_formula_itself_unchanged_at_time_of_this_fix():
+    """At the time Fix #6AB landed, compute_signal_health() was still a bare
+    unweighted average of all 3 inputs and was explicitly out of scope for
+    that fix. Fix #6BI later changed it deliberately (dropped align_conf --
+    Fix #6BH's audit found it duplicated momentum_conf), so this assertion
+    is updated to the current 2-pillar formula; see
+    test_signal_health_two_pillar.py for #6BI's own dedicated coverage."""
     health = compute_signal_health(10.0, 20.0, 30.0)
-    assert health["score_pct"] == 20.0
+    assert health["score_pct"] == 15.0
 
 
 # ---------------------------------------------------------------------------
