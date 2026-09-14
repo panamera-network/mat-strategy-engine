@@ -1,7 +1,7 @@
 from dataclasses import asdict
 from typing import Any, Dict, Optional
 
-from core.Output.diagnostic_models import ScalpCfg, flipped_up, get, label_neutral_or_up, label_up, normalize_struct_label
+from core.Output.diagnostic_models import ScalpCfg, flipped_up, get, label_neutral_or_up, label_up
 
 
 def _bias_strength(bias_entry: Dict[str, Any]) -> float:
@@ -34,7 +34,13 @@ def enrich_swing_with_diagnostic(
     d1_snap = swing_map.get("D1", {}) or {}
 
     # Structure/shift/demand/suppression
-    st_h4 = normalize_struct_label(get(h4_snap, "structure_label", "None"))
+    # Fix #6BN — normalize_struct_label() removed: Fix #6BL's audit found
+    # it inert for this check. It only ever changes None->"None" and
+    # "neutral"->"Neutral" -- neither transformation affects whether the
+    # value equals "BOS"/"CHOCH" below, and build_scalping.py's equivalent
+    # check already reads structure_label raw with no normalization at
+    # all, producing the identical result. The raw value is used directly.
+    st_h4 = get(h4_snap, "structure_label", "None")
     sh_h4 = bool(get(h4_snap, "shift_confirmed", False))
     dm_h4 = (get(h4_snap, "demand", "neutral") or "").lower()
     sup_h1 = bool(get(h1_snap, "suppression", False))

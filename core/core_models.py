@@ -352,7 +352,6 @@ class StyleSnapshot:
     conviction: float = 0.0
     conviction_breakdown: dict[str, float] = field(default_factory=dict)
     suppression: bool = False
-    engulfing_sequence: Optional[List[str]] = None
 
     def __post_init__(self):
         self.compute_conviction()
