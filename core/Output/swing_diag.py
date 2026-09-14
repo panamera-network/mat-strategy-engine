@@ -41,8 +41,12 @@ def enrich_swing_with_diagnostic(
     sup_h4 = bool(get(h4_snap, "suppression", False))
 
     # Momentum
-    m_h1 = float(get(h1_snap, "momentum", 0.0))
-    m_h4 = float(get(h4_snap, "momentum", 0.0))
+    # Fix #6AQ — momentum_ok below now gates on the canonical, ATR-normalized
+    # value (instrument-scale-independent). The raw StyleSnapshot.momentum
+    # field remains purely a display/compatibility value elsewhere in the
+    # output; it is no longer read for any check in this function.
+    m_h1_atr = get(h1_snap, "atr_normalized_momentum", None)
+    m_h4_atr = get(h4_snap, "atr_normalized_momentum", None)
 
     # Checks
     checks = {
@@ -52,7 +56,19 @@ def enrich_swing_with_diagnostic(
         "h4_flip_up": flipped_up(pb_h4, l_h4),
         "h1_strength_ok": s_h1 >= cfg.t_strength_seed,
         "h4_strength_rising": (s_h4 - (_bias_strength(prev_bias_map.get("H4", {})) if prev_bias_map else s_h4)) >= cfg.t_strength_rising_delta,
-        "momentum_ok": m_h1 >= cfg.t_momentum_min and m_h4 >= cfg.t_momentum_min,
+        # Fix #6AQ — "momentum_ok" means meaningful momentum IN THE UP
+        # direction this whole diagnostic evaluates (every other check here
+        # -- bias_h1_up, bias_h4_up, h4_flip_up -- is up-only; there is no
+        # down-path in this function). That's why this stays a signed ">="
+        # against a positive threshold, not an abs() >= comparison -- abs()
+        # would flag strong bearish momentum as "ok" too, which would
+        # contradict every other check in this dict. None (ATR14
+        # unavailable) is treated as not-ok, same as the old raw value's
+        # implicit 0.0 default.
+        "momentum_ok": (
+            m_h1_atr is not None and m_h4_atr is not None
+            and m_h1_atr >= cfg.t_momentum_min_atr and m_h4_atr >= cfg.t_momentum_min_atr
+        ),
         # Fix #6E — structure_ok now means a real confirmed BOS/CHoCH only
         # (see build_scalping.py's comment for the full rationale). A
         # separate zone_interaction_ok key was deliberately NOT added here:
@@ -126,6 +142,7 @@ def enrich_swing_with_diagnostic(
         "t_strength_seed": cfg.t_strength_seed,
         "t_strength_rising_delta": cfg.t_strength_rising_delta,
         "t_momentum_min": cfg.t_momentum_min,
+        "t_momentum_min_atr": cfg.t_momentum_min_atr,
         "t_bias_abs_min": cfg.t_bias_abs_min,
         "swing_support_strength": cfg.swing_support_strength
 

@@ -38,8 +38,12 @@ def build_scalping_diagnostic(symbol, scalping_map, bias_map, cfg):
     s5 = bias_map["M5"]["strength_diagnostic"].strength if bias_map["M5"].get("strength_diagnostic") else None
 
     # --- Momentum from StyleSnapshot ---
-    m1 = scalping_map["M1"].momentum
-    m5 = scalping_map["M5"].momentum
+    # Fix #6AQ — momentum_ok below now gates on the canonical, ATR-normalized
+    # value (instrument-scale-independent). The raw StyleSnapshot.momentum
+    # field remains purely a display/compatibility value elsewhere in the
+    # output; it is no longer read for any check in this function.
+    m1_atr = scalping_map["M1"].atr_normalized_momentum
+    m5_atr = scalping_map["M5"].atr_normalized_momentum
 
     # --- Structure & shift ---
     st5 = scalping_map["M5"].structure_label
@@ -68,7 +72,19 @@ def build_scalping_diagnostic(symbol, scalping_map, bias_map, cfg):
                 cfg.t_strength_rising_delta
             )
         ),
-        "momentum_ok": m1 >= cfg.t_momentum_min and m5 >= cfg.t_momentum_min,
+        # Fix #6AQ — "momentum_ok" means meaningful momentum IN THE UP
+        # direction this whole diagnostic evaluates (every other check here
+        # -- bias_m1_up, bias_m5_up, m5_flip_up_on_close -- is up-only; there
+        # is no down-path in this function). That's why this stays a signed
+        # ">=" against a positive threshold, not an abs() >= comparison --
+        # abs() would flag strong bearish momentum as "ok" too, which would
+        # contradict every other check in this dict. None (ATR14 unavailable)
+        # is treated as not-ok, same as the old raw value's implicit
+        # 0.0 default.
+        "momentum_ok": (
+            m1_atr is not None and m5_atr is not None
+            and m1_atr >= cfg.t_momentum_min_atr and m5_atr >= cfg.t_momentum_min_atr
+        ),
         # Fix #6E — structure_ok now means a real confirmed BOS/CHoCH only.
         # It used to also accept a mere zone touch as a stand-in when
         # structure was Neutral — Fix #6B's audit found this conflated
@@ -178,6 +194,7 @@ def build_scalping_diagnostic(symbol, scalping_map, bias_map, cfg):
         "t_strength_seed": cfg.t_strength_seed,
         "t_strength_rising_delta": cfg.t_strength_rising_delta,
         "t_momentum_min": cfg.t_momentum_min,
+        "t_momentum_min_atr": cfg.t_momentum_min_atr,
         "t_bias_abs_min": cfg.t_bias_abs_min,
         "swing_support_strength": cfg.swing_support_strength
     }

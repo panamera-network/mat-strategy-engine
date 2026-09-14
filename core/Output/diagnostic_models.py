@@ -9,6 +9,21 @@ class ScalpCfg:
     t_momentum_min: float = 0.3             # Min momentum for validation
     t_bias_abs_min: float = 0.5             # Ignore tiny bias
     swing_support_strength: float = 1.2     # H1 strength to call "supports long"
+    # Fix #6AQ — canonical ATR-normalized replacement for the raw-momentum
+    # gate above (t_momentum_min). Comparing a fixed raw threshold against
+    # StyleSnapshot.momentum (a raw, per-instrument price-unit displacement)
+    # is scale-broken across instruments (Fix #6AP's audit: EURUSD/GBPUSD
+    # essentially never clear 0.3 regardless of true strength; BTCUSD clears
+    # it trivially regardless of true strength). build_scalping.py's and
+    # swing_diag.py's momentum_ok check now gate on this value against the
+    # canonical atr_normalized_momentum instead. 0.5 is the existing
+    # weak/moderate boundary (Fix #6Z) — momentum_ok's original intent was
+    # "exclude negligible/noise momentum", not "require strong momentum",
+    # so this is the smallest already-established canonical boundary that
+    # matches that intent. t_momentum_min itself is left defined and
+    # unchanged (still used by diagnostic_models.py's own unrelated,
+    # already-uncalled enrich_scalping_with_cascade()) for compatibility.
+    t_momentum_min_atr: float = 0.5
 
 
 # Shared diagnostic config + timeframe orders — single source of truth,
@@ -19,6 +34,7 @@ cfg = ScalpCfg(
     t_momentum_min=0.3,
     t_bias_abs_min=0.5,
     swing_support_strength=1.2,
+    t_momentum_min_atr=0.5,
 )
 
 SCALPING_ORDER = ["M1", "M5", "M15", "M30"]
