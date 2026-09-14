@@ -22,15 +22,21 @@ class MomentumEngine:
             )
 
         closes = [c.close for c in candles[-6:]]
-        slope1 = closes[3] - closes[0]
         slope2 = closes[5] - closes[2]
-        acceleration = slope2 - slope1
         raw_score = slope2
         scaled_score = max(0.0, min(10.0, abs(raw_score) * 2.5))  # tweak scale_factor
 
-        # Placeholder logic — you can refine this
-        threshold = 0.5
-        confidence_drop = slope2 < slope1 and abs(acceleration) > threshold
+        # Fix #6BD — confidence_drop retired: compatibility/deprecated
+        # field, intentionally frozen to False. The old raw-price-unit
+        # formula (slope2 < slope1 and abs(acceleration) > 0.5) is removed
+        # -- Fix #6BC's audit found it severely instrument-scale-broken
+        # (0% activation for FX, ~50% for crypto, purely from price scale)
+        # with zero live behavioral consumer since Fix #6AO retired legacy
+        # suppression. The field stays in MomentumSnapshot/StructureSnapshot/
+        # BiasShiftEvent for /core/bias/shift* backward compatibility --
+        # never backfilled with a new formula, threshold, or ATR-based
+        # replacement.
+        confidence_drop = False
 
         # Fix #6U/#6V — canonical signed, dimensionless momentum: the same
         # slope2 (3-bar displacement) above, divided by ATR14 — no clamp,
