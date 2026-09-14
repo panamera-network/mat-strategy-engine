@@ -357,11 +357,17 @@ def test_live_style_snapshot_zone_fields_unchanged_post_split():
     assert checked_any
 
 
-def test_live_shift_score_still_never_fires_ordering_bug_unchanged():
-    """Fix #6AI's audit found shift_score is permanently 0.0 in conviction
-    today because StyleEngine.py's call ordering isn't touched by this fix
-    -- confirm that's still true post-split (this fix intentionally does
-    NOT resurrect shift_score; that's explicitly out of scope here)."""
+def test_live_shift_score_ordering_bug_status_at_time_of_this_fix():
+    """At the time Fix #6AJ landed, shift_score was still permanently 0.0
+    in conviction because StyleEngine.py's call ordering hadn't been fixed
+    yet -- this fix (#6AJ) deliberately did not touch that, only split
+    ShiftEngine's detection from its colorization. Fix #6AK later fixed
+    the ordering AND made conviction direction-relative (see
+    test_direction_relative_conviction.py), which also corrected
+    conviction_breakdown's shape for scalping mode (Fix #6AG's finding:
+    it used to expose swing-shaped keys even for scalping). This test now
+    documents that scalping's breakdown is momentum/shift/bias-shaped,
+    not the old structure/bias/zone_score shape."""
     import api.core_router as cr
     from core.candle_cache import CandleCache
     from core.StyleEngine import get_style_snapshot
@@ -375,8 +381,4 @@ def test_live_shift_score_still_never_fires_ordering_bug_unchanged():
         cr.bias_engine, cr.momentum_engine, cr.demand_engine, cr.structure_engine, cr.shift_engine,
         cache=cache,
     )
-    # conviction_breakdown's own bias-only-populated shape (Fix #6AG's
-    # finding) is untouched -- still no momentum/shift keys in it.
-    assert "structure" in snapshot.conviction_breakdown
-    assert "bias" in snapshot.conviction_breakdown
-    assert "zone_score" in snapshot.conviction_breakdown
+    assert set(snapshot.conviction_breakdown.keys()) == {"momentum", "shift", "bias"}

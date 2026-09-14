@@ -46,6 +46,17 @@ class ShiftEngine:
         evidence = self._detect_interaction_evidence(snapshot, tf, cache=cache)
         return self.build_zone_interaction_result(evidence, conviction)
 
+    def detect_zone_interaction_evidence(self, snapshot: StructureSnapshot, tf: str, cache=None) -> dict:
+        """Fix #6AK — public entry point for pure detection, for callers
+        (StyleEngine.py) that need evidence BEFORE conviction is known, so
+        conviction can be computed once, correctly, from real evidence
+        instead of the pre-#6AK dataclass defaults. Composes/reuses the
+        existing _detect_interaction_evidence() rather than duplicating
+        it — same single count=1 cached candle fetch, same bookkeeping,
+        no conviction dependency. Callers should use this method, not the
+        private _detect_interaction_evidence(), directly."""
+        return self._detect_interaction_evidence(snapshot, tf, cache=cache)
+
     def _detect_interaction_evidence(self, snapshot: StructureSnapshot, tf: str, cache=None) -> dict:
         """Fix #6AJ — pure detection step, extracted unchanged from the
         pre-split detect_zone_interaction(): the same single 1-candle

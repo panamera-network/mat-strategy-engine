@@ -26,7 +26,19 @@ def get_style_snapshot(symbol, tf, mode,
     # would just recompute detect_zones() a second time for the same answer.
     zone_label = structure.context_zone
 
-    # Step 1: Build snapshot without shift info so conviction is computed
+    # Step 1 (Fix #6AK) — detect zone interaction evidence BEFORE building
+    # the snapshot, resolving the ordering bug Fix #6AI found: previously
+    # StyleSnapshot was constructed (running compute_conviction() via
+    # __post_init__) with shift_confirmed still at its dataclass default
+    # (False), then detect_zone_interaction() ran only afterward — meaning
+    # conviction's shift term was permanently computed against stale,
+    # always-False data. Uses the public two-phase API (Fix #6AJ/#6AK):
+    # detect_zone_interaction_evidence() is pure detection, no conviction
+    # dependency, same single count=1 cached candle fetch as before.
+    zone_evidence = shift_engine.detect_zone_interaction_evidence(structure, tf, cache=cache)
+
+    # Step 2 — build the snapshot with all real evidence already known, so
+    # __post_init__ -> compute_conviction() runs exactly once, correctly.
     snapshot = StyleSnapshot(
         symbol=symbol,
         timeframe=tf,
@@ -36,6 +48,12 @@ def get_style_snapshot(symbol, tf, mode,
         bias=bias.bias_score,
         demand=zone_label,
         structure_label=structure.structure_type,
+        # Fix #6AK — needed for conviction's structure-agreement check
+        # (swing mode): does the BOS/CHoCH direction agree with this
+        # snapshot's own labeled direction? Not read anywhere before this
+        # fix. getattr() defensively handles minimal fake/test structure
+        # objects that predate this field.
+        structure_direction=getattr(structure, "structure_direction", None),
         # Fix #6Z — canonical momentum evidence, reused from the already-
         # fetched `structure` snapshot (StructureEngine already computed
         # this via MomentumEngine.compute() — no extra fetch, no second
@@ -44,26 +62,30 @@ def get_style_snapshot(symbol, tf, mode,
         # structure objects that predate this field (e.g. this file's own
         # test doubles) — None, same as the canonical "unavailable" value.
         atr_normalized_momentum=getattr(structure, "atr_normalized_momentum", None),
+        # Fix #6AK — real, final zone-interaction evidence, known BEFORE
+        # construction (not the dataclass defaults, not mutated
+        # afterward). This is what fixes the dead shift_score bug.
+        zone_interaction=zone_evidence["interacted"],
+        zone_interaction_direction=zone_evidence["interaction_direction"],
+        shift_confirmed=zone_evidence["shifted"],
+        shift_direction=zone_evidence["shift_direction"],
     )
 
-    # Step 2: Detect zone interaction with conviction-aware coloring
-    # (Fix #6D — canonical name; detect_shift() still exists as an alias).
-    zone_interaction_result = shift_engine.detect_zone_interaction(structure, tf, conviction=snapshot.conviction, cache=cache)
+    # Step 3 — colorize using the now-correct snapshot.conviction. No
+    # second detection/fetch: build_zone_interaction_result() is pure
+    # color derivation over the already-known evidence (Fix #6AJ).
+    zone_interaction_result = shift_engine.build_zone_interaction_result(zone_evidence, conviction=snapshot.conviction)
 
-    # Step 3: Duration
+    # Step 4: Duration
     last_change_time = shift_engine.get_last_shift_change_time(symbol, tf)
     if last_change_time:
         elapsed_minutes = int((datetime.now(timezone.utc) - last_change_time).total_seconds() / 60)
         snapshot.duration = f"{elapsed_minutes} min"
 
-    # Step 4: Update zone interaction fields — canonical (Fix #6D) plus the
-    # legacy shift_* aliases, set to the exact same values so existing
-    # diagnostic/alignment consumers are unaffected by this rename.
-    snapshot.zone_interaction = zone_interaction_result["zone_interaction"]
-    snapshot.zone_interaction_direction = zone_interaction_result["zone_interaction_direction"]
+    # Step 5 — assign the color fields only; zone_interaction/direction/
+    # shift_confirmed/shift_direction were already set correctly at
+    # construction (Step 2) and are not reassigned here.
     snapshot.zone_interaction_color = zone_interaction_result["zone_interaction_color"]
-    snapshot.shift_confirmed = zone_interaction_result["shifted"]
-    snapshot.shift_direction = zone_interaction_result["shift_direction"]
     snapshot.shift_color = zone_interaction_result["shift_color"]
 
     return snapshot

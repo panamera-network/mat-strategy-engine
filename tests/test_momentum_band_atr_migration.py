@@ -120,9 +120,25 @@ def test_get_style_snapshot_reuses_structure_atr_normalized_momentum():
             raise AssertionError("unrelated to this test")
 
     class FakeShiftEngine:
+        # Fix #6AK — StyleEngine.get_style_snapshot() now calls the
+        # two-phase API (detect_zone_interaction_evidence() +
+        # build_zone_interaction_result()) instead of the old single
+        # detect_zone_interaction() call; detect_zone_interaction()/
+        # detect_shift() are kept below only as harmless leftover API
+        # surface, composed from the same two methods, unused by
+        # get_style_snapshot() any more.
+        def detect_zone_interaction_evidence(self, structure, tf, cache=None):
+            return {"interacted": False, "interaction_direction": "Neutral", "zone_type": "neutral", "level": None,
+                    "shifted": False, "shift_direction": "Neutral"}
+
+        def build_zone_interaction_result(self, evidence, conviction=None):
+            return {"zone_interaction": evidence["interacted"], "zone_interaction_direction": evidence["interaction_direction"],
+                    "zone_interaction_color": "#ccc", "shifted": evidence["shifted"], "shift_direction": evidence["shift_direction"],
+                    "shift_color": "#ccc"}
+
         def detect_zone_interaction(self, structure, tf, conviction=None, cache=None):
-            return {"zone_interaction": False, "zone_interaction_direction": "Neutral", "zone_interaction_color": "#ccc",
-                    "shifted": False, "shift_direction": "Neutral", "shift_color": "#ccc"}
+            evidence = self.detect_zone_interaction_evidence(structure, tf, cache=cache)
+            return self.build_zone_interaction_result(evidence, conviction)
 
         def detect_shift(self, structure, tf, conviction=None, cache=None):
             return self.detect_zone_interaction(structure, tf, conviction=conviction, cache=cache)
@@ -167,9 +183,19 @@ def test_get_style_snapshot_defaults_to_none_for_minimal_fake_structure():
             return FakeMomentum()
 
     class FakeShiftEngine:
+        # Fix #6AK — see the other FakeShiftEngine above in this file.
+        def detect_zone_interaction_evidence(self, structure, tf, cache=None):
+            return {"interacted": False, "interaction_direction": "Neutral", "zone_type": "neutral", "level": None,
+                    "shifted": False, "shift_direction": "Neutral"}
+
+        def build_zone_interaction_result(self, evidence, conviction=None):
+            return {"zone_interaction": evidence["interacted"], "zone_interaction_direction": evidence["interaction_direction"],
+                    "zone_interaction_color": "#ccc", "shifted": evidence["shifted"], "shift_direction": evidence["shift_direction"],
+                    "shift_color": "#ccc"}
+
         def detect_zone_interaction(self, structure, tf, conviction=None, cache=None):
-            return {"zone_interaction": False, "zone_interaction_direction": "Neutral", "zone_interaction_color": "#ccc",
-                    "shifted": False, "shift_direction": "Neutral", "shift_color": "#ccc"}
+            evidence = self.detect_zone_interaction_evidence(structure, tf, cache=cache)
+            return self.build_zone_interaction_result(evidence, conviction)
 
         def get_last_shift_change_time(self, symbol, tf):
             return None
@@ -283,7 +309,16 @@ def test_alignment_signal_momentum_vote_migrated_by_later_fix_6af():
     assert result_with["total_score"] != result_without["total_score"]
 
 
-def test_conviction_unaffected_by_atr_normalized_momentum():
+def test_conviction_unaffected_by_atr_normalized_momentum_when_direction_neutral():
+    """At the time this fix (#6Z) landed, conviction never read
+    atr_normalized_momentum at all, so this held for any direction. Fix
+    #6AK later made conviction direction-relative and DOES read
+    atr_normalized_momentum (as its momentum term) for bullish/bearish
+    snapshots -- see test_direction_relative_conviction.py for that. This
+    narrower case still holds for a different reason: a "neutral"
+    direction means no directional call exists at all, so every term
+    (including momentum) gates to 0 regardless of atr_normalized_momentum's
+    value."""
     from core.core_models import StyleSnapshot
 
     snap_a = StyleSnapshot(symbol="T", timeframe="M15", mode="scalping",
@@ -292,7 +327,7 @@ def test_conviction_unaffected_by_atr_normalized_momentum():
     snap_b = StyleSnapshot(symbol="T", timeframe="M15", mode="scalping",
                             direction="neutral", momentum=0.8, bias=1.0,
                             atr_normalized_momentum=3.0)
-    assert snap_a.conviction == snap_b.conviction
+    assert snap_a.conviction == snap_b.conviction == 0.0
 
 
 # ---------------------------------------------------------------------------

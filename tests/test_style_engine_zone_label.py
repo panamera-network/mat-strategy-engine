@@ -62,11 +62,23 @@ class FakeShiftResult(dict):
 
 
 class FakeShiftEngine:
+    # Fix #6AK — StyleEngine.get_style_snapshot() now calls the two-phase
+    # API (detect_zone_interaction_evidence() + build_zone_interaction_
+    # result()) instead of the old single detect_zone_interaction() call;
+    # that method is kept below as harmless leftover API surface, composed
+    # from the same two methods, unused by get_style_snapshot() any more.
+    def detect_zone_interaction_evidence(self, structure, tf, cache=None):
+        return {"interacted": False, "interaction_direction": "none", "zone_type": "none", "level": None,
+                "shifted": False, "shift_direction": "none"}
+
+    def build_zone_interaction_result(self, evidence, conviction=None):
+        return {"zone_interaction": evidence["interacted"], "zone_interaction_direction": evidence["interaction_direction"],
+                "zone_interaction_color": "gray", "shifted": evidence["shifted"], "shift_direction": evidence["shift_direction"],
+                "shift_color": "gray"}
+
     def detect_zone_interaction(self, structure, tf, conviction=None, cache=None):
-        return {
-            "zone_interaction": False, "zone_interaction_direction": "none", "zone_interaction_color": "gray",
-            "shifted": False, "shift_direction": "none", "shift_color": "gray",
-        }
+        evidence = self.detect_zone_interaction_evidence(structure, tf, cache=cache)
+        return self.build_zone_interaction_result(evidence, conviction)
 
     def detect_shift(self, structure, tf, conviction=None, cache=None):
         return self.detect_zone_interaction(structure, tf, conviction=conviction, cache=cache)

@@ -320,6 +320,12 @@ class StyleSnapshot:
     momentum: float
     bias: float
     structure_label: Optional[str] = None
+    # Fix #6AK — the BOS/CHoCH break's own direction ("Bullish"/"Bearish"/
+    # "Neutral"), copied from StructureSnapshot.structure_direction. Needed
+    # so compute_conviction()'s structure term can check agreement with
+    # this snapshot's own labeled `direction` instead of rewarding any
+    # BOS/CHoCH regardless of which way it broke (Fix #6AI/#6AH's finding).
+    structure_direction: Optional[str] = None
     shift_confirmed: bool = False
     shift_direction: str = "bearish"
     shift_color: str = "#cccccc"
@@ -347,48 +353,119 @@ class StyleSnapshot:
 
     def __post_init__(self):
         self.compute_conviction()
-    
+
+    # Fix #6AK — conviction redesigned per Fix #6AH/#6AI's audits:
+    # conviction = confidence in THIS snapshot's own labeled `direction`,
+    # bounded [0,1], never negative. Every term below is agreement-gated
+    # against `direction` and floors to 0 on opposition or when no
+    # directional call exists (`direction == "neutral"`) -- there is no
+    # final emergency clamp anywhere in this method; each term is already
+    # bounded to its own weight slice, and the per-mode weights (0.4+0.3+0.3
+    # swing, 0.5+0.3+0.2 scalping) already sum to exactly 1.0, so the total
+    # naturally lands in [0,1] by construction. `direction` itself uses two
+    # different vocabularies depending on its source ("uptrend"/"downtrend"/
+    # "neutral" from BiasEngine for this field; "Bullish"/"Bearish"/
+    # "Neutral" from StructureEngine/ShiftEngine for structure_direction/
+    # shift_direction) -- _is_bullish()/_is_bearish() below recognize both.
+    def _is_bullish(self) -> bool:
+        return self.direction in ("uptrend", "bullish", "Bullish")
+
+    def _is_bearish(self) -> bool:
+        return self.direction in ("downtrend", "bearish", "Bearish")
+
     def compute_conviction(self):
-        base = 0.0
-        structure_weight = 0.0  # ✅ always defined
-        demand_score = 0        # ✅ always defined
+        is_bullish = self._is_bullish()
+        is_bearish = self._is_bearish()
+        has_direction = is_bullish or is_bearish
 
         if self.mode == "swing":
-            structure_weight = {
-                "BOS": 1.0,
-                "CHOCH": 0.7,
-                "None": 0.0
-            }.get(self.structure_label or "None", 0.0)
-
-            demand_map = {
-                "strong buy": +2,
-                "buy": +1,
-                "neutral": 0,
-                "sell": -1,
-                "strong sell": -2
-            }
-            demand_score = demand_map.get(self.demand.lower(), 0)
-
-            base = (
-                structure_weight * 0.4 +
-                (self.bias / 10) * 0.3 +
-                demand_score * 0.3
+            # Structure term (max 0.4) — BOS=1.0/CHoCH=0.7 magnitude,
+            # rewarded only when the break's own direction agrees with
+            # this snapshot's labeled direction; opposing, missing, or
+            # neutral structure contributes 0, never a penalty.
+            structure_weight = {"BOS": 1.0, "CHOCH": 0.7}.get(self.structure_label or "None", 0.0)
+            structure_agrees = (
+                (is_bullish and self.structure_direction == "Bullish") or
+                (is_bearish and self.structure_direction == "Bearish")
             )
+            structure_component = (structure_weight * 0.4) if (has_direction and structure_agrees) else 0.0
+
+            # Bias term (max 0.3) — magnitude only; bias and `direction`
+            # are structurally the same evidence (both derived from the
+            # same BiasEngine.evaluate_bias() call), so bias can never
+            # oppose `direction` in practice (Fix #6AH's audit) -- abs()
+            # is used rather than a redundant always-true agreement check.
+            # min(...,1.0) bounds this term to its own weight slice
+            # explicitly, rather than relying on bias_score's upstream
+            # +/-10 invariant (BiasEngine.py) to keep it in range.
+            bias_component = min(abs(self.bias / 10), 1.0) * 0.3 if has_direction else 0.0
+
+            # Zone/demand term (max 0.3) — direction-relative fold of the
+            # existing demand_score in [-2,+2]: only the half of the scale
+            # that agrees with `direction` counts, the other half (and
+            # neutral) contributes 0.
+            demand_map = {"strong buy": +2, "buy": +1, "neutral": 0, "sell": -1, "strong sell": -2}
+            demand_score = demand_map.get(self.demand.lower(), 0)
+            if is_bullish:
+                zone_component = max(demand_score, 0) / 2 * 0.3
+            elif is_bearish:
+                zone_component = max(-demand_score, 0) / 2 * 0.3
+            else:
+                zone_component = 0.0
+
+            self.conviction_breakdown = {
+                "structure": round(structure_component, 2),
+                "bias": round(bias_component, 2),
+                "zone_score": round(zone_component, 2),
+            }
 
         elif self.mode == "scalping":
-            shift_score = 1.0 if self.shift_confirmed else 0.0
-            base = (
-                (self.momentum / 10) * 0.5 +
-                shift_score * 0.3 +
-                (self.bias / 10) * 0.2
+            # Momentum term (max 0.5) — canonical atr_normalized_momentum,
+            # rewarded only when its sign agrees with `direction`. The
+            # normalization (/2.0, capped at 1.0) bounds only this
+            # CONTRIBUTION -- atr_normalized_momentum itself stays
+            # unclamped everywhere else (MomentumEngine.py, momentum_band/
+            # momentum_conf/momentum_pct, Alignment). None or opposing
+            # sign -> 0, never a penalty.
+            atr = self.atr_normalized_momentum
+            momentum_agrees = (
+                atr is not None and (
+                    (is_bullish and atr > 0) or (is_bearish and atr < 0)
+                )
             )
+            momentum_component = (min(abs(atr) / 2.0, 1.0) * 0.5) if (has_direction and momentum_agrees) else 0.0
 
-        self.conviction = round(base, 2)
-        self.conviction_breakdown = {
-            "structure": round(structure_weight * 0.4, 2),
-            "bias": round((self.bias / 10) * 0.3, 2),
-            "zone_score": round(demand_score * 0.3, 2)  # ✅ also renamed to match your JSON
-        }
+            # Shift term (max 0.3) — Fix #6AK also fixes the ordering bug
+            # (Fix #6AI's audit) that made this permanently 0 in
+            # production: shift_confirmed/shift_direction are now real,
+            # final evidence at construction time (see StyleEngine.py),
+            # not dataclass defaults. Rewarded only when the zone touch's
+            # own direction agrees with `direction`.
+            shift_agrees = (
+                (is_bullish and self.shift_direction == "Bullish") or
+                (is_bearish and self.shift_direction == "Bearish")
+            )
+            shift_component = 0.3 if (has_direction and self.shift_confirmed and shift_agrees) else 0.0
+
+            # Bias term (max 0.2) — same reasoning as swing's bias term.
+            bias_component = min(abs(self.bias / 10), 1.0) * 0.2 if has_direction else 0.0
+
+            self.conviction_breakdown = {
+                "momentum": round(momentum_component, 2),
+                "shift": round(shift_component, 2),
+                "bias": round(bias_component, 2),
+            }
+
+        else:
+            self.conviction_breakdown = {}
+
+        # Fix #6AK — breakdown is the source of truth: each component is
+        # already rounded to the existing 2dp convention above, and
+        # conviction is the rounded SUM of those already-rounded values,
+        # so breakdown always reconciles exactly with the exposed
+        # conviction (Fix #6AG's audit found the old breakdown never
+        # matched conviction for scalping mode at all).
+        self.conviction = round(sum(self.conviction_breakdown.values()), 2)
 
 
         
