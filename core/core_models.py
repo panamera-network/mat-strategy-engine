@@ -114,11 +114,7 @@ class MomentumSnapshot:
     timeframe: str
     momentum: float           # scaled 0–10
     slope: float              # directional slope
-    acceleration: float       # change in slope
-    reversal: bool            # momentum reversal flag
-    divergence: str = "None"  # "Bullish", "Bearish", "None"
     confidence_drop: bool = False
-    direction: str = "Neutral"
     score: float = 0.0        # raw float before scaling
     # Fix #6V — canonical signed, dimensionless momentum: slope2 (the same
     # 3-bar displacement `score` above is built from) divided by ATR14, no
@@ -126,8 +122,15 @@ class MomentumSnapshot:
     # MomentumEngine.compute() wasn't given enough candles for a genuine
     # 14-period ATR (needs >=15) — deliberately not backfilled with a
     # different/shorter denominator. Additive only; momentum/slope/
-    # acceleration/reversal/direction/score/confidence_drop above are
-    # unchanged and still computed exactly as before.
+    # score/confidence_drop above are unchanged and still computed exactly
+    # as before.
+    # Fix #6BB — acceleration/reversal/direction/divergence fields deleted
+    # (confirmed fully dead by Fix #6BA's audit: zero repo-wide consumers,
+    # never copied into StructureSnapshot/StyleSnapshot, never exposed via
+    # any API route or serialization). The `acceleration` local variable
+    # confidence_drop's formula depends on is unaffected — it was always a
+    # plain local in MomentumEngine.compute(), never sourced from this
+    # field.
     atr_normalized_momentum: float | None = None
 
 

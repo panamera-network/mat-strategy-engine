@@ -1,7 +1,12 @@
 """Fix #6V — targeted tests for canonical ATR-normalized momentum
 (MomentumEngine.compute()'s atr_normalized_momentum = slope2/ATR14, no
 clamp/multiplier/threshold — Fix #6U's audit conclusion). Additive only:
-.score/.momentum/.direction/.confidence_drop/.reversal are untouched.
+.score/.momentum/.confidence_drop are untouched.
+
+Fix #6BB later deleted MomentumSnapshot.direction/.acceleration/.reversal/
+.divergence and detect_divergence()/fetch_momentum_score()/get_score()
+(confirmed fully dead by Fix #6BA's audit) -- the shape assertions this
+file used to make on .direction/.reversal were removed with them.
 
 Run in isolation (the rest of /tests is broken on unrelated pre-existing
 imports — see CLAUDE.md):
@@ -17,8 +22,8 @@ def c(o, h, l, cl, ts):
 
 
 class FakeCandleEngine:
-    """Unused by compute() directly; only needed for get_momentum()/
-    get_score()'s own count=6 fetch path."""
+    """Unused by compute() directly; only needed for get_momentum()'s own
+    count=6 fetch path."""
     def __init__(self, candles):
         self._candles = candles
 
@@ -200,9 +205,7 @@ def test_old_score_and_momentum_unchanged_by_this_fix():
 
     assert snap.score == expected_slope2
     assert snap.momentum == expected_scaled
-    assert snap.direction in ("Up", "Down", "Neutral")
     assert isinstance(snap.confidence_drop, bool)
-    assert isinstance(snap.reversal, bool)
 
 
 def test_no_extra_candle_fetch_when_called_via_compute_directly():
