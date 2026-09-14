@@ -7,6 +7,11 @@ suppression. The field itself stays in MomentumSnapshot/StructureSnapshot/
 BiasShiftEvent for /core/bias/shift* backward compatibility -- no new
 formula, threshold, or ATR-based replacement is introduced.
 
+Fix #6BK later retired /core/bias/shift*'s own calculation entirely
+(detect_bias_shift() never actually detected a shift -- see Fix #6BJ's
+audit); the live-event test below was updated accordingly to prove that
+retirement instead of a real fired event.
+
 Run in isolation (the rest of /tests is broken on unrelated pre-existing
 imports -- see CLAUDE.md):
     pytest tests/test_confidence_drop_frozen.py -v
@@ -112,27 +117,33 @@ def test_structure_snapshot_propagates_false():
 
 
 # ---------------------------------------------------------------------------
-# BiasShiftEvent still exposes False, via the real detect_bias_shift() path.
+# Fix #6BK later retired detect_bias_shift() entirely (Fix #6BJ's audit:
+# it never actually detected a shift -- prev_bias was accepted but never
+# compared against anything). At the time this fix (#6BD) landed, it still
+# fired real BiasShiftEvents and this test proved confidence_drop froze to
+# False on one; now it proves the retirement itself instead -- see
+# tests/test_bias_shift_route_retired.py for #6BK's own dedicated coverage.
 # ---------------------------------------------------------------------------
 
-def test_bias_shift_event_exposes_false_live():
+def test_detect_bias_shift_always_returns_none_even_for_a_real_confirmed_event():
     import api.core_router as cr
     from core.ShiftEngine import detect_bias_shift
 
     symbols = ["XAUUSD_i", "BTCUSD_i", "EURUSD_i", "USDJPY_i", "GBPUSD_i"]
     timeframes = ["M15", "H1", "H4", "D1"]
-    fired = 0
+    checked_a_confirmed_event = False
     for symbol in symbols:
         for tf in timeframes:
             structure = cr.structure_engine.get_snapshot(symbol, tf)
             if not structure or not structure.structure_valid:
                 continue
+            checked_a_confirmed_event = True
             event = detect_bias_shift(prev_bias="Neutral", snapshot=structure, symbol=symbol)
-            if event:
-                fired += 1
-                assert event.confidence_drop is False
+            assert event is None
 
-    assert fired > 0  # confirms this test actually exercised a real event, not vacuously true
+    # confirms this test actually exercised a real, live, confirmed-valid
+    # structural event -- not vacuously true because none existed to fire.
+    assert checked_a_confirmed_event
 
 
 # ---------------------------------------------------------------------------

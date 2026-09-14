@@ -10,7 +10,7 @@ from core.MomentumEngine import MomentumEngine
 
 from core.Output.Output import build_multi_symbol_output
 
-from core.ShiftEngine import ShiftEngine, detect_bias_shift
+from core.ShiftEngine import ShiftEngine
 from core.StrengthEngine import StrengthEngine
 from core.StructureEngine import StructureEngine
 from core.StyleEngine import build_multi_symbol_snapshot
@@ -97,61 +97,26 @@ def get_structure_snapshots(
 def get_bias_shift_events(
     symbols: List[str] = ["XAUUSD_i", "BTCUSD_i", "EURUSD_i"],
     tf: str = "M15",
-   
 ):
-    structure_engine = StructureEngine(candle_engine, demand_engine=demand_engine)
-    events: List[BiasShiftEvent] = []
+    """Fix #6BK — retired. Fix #6BJ's audit found detect_bias_shift() never
+    actually detected a shift (its `prev_bias` argument was hardcoded and
+    never compared against anything) -- every call just re-reported
+    whatever structural event happened to be currently confirmed, with no
+    dedup. The real, canonical fact (a confirmed structural event) is
+    already exposed via /core/output's structure_events block, cached and
+    batched. Route, query signature, and response schema are kept for
+    backward compatibility; always returns an empty list now, with no
+    StructureEngine instantiation or candle fetch."""
+    return []
 
-    for symbol in symbols:
-        snapshot: StructureSnapshot = structure_engine.get_snapshot(symbol, tf)
-        if not snapshot or not snapshot.structure_valid:
-            continue
-
-        event = detect_bias_shift(
-            prev_bias="Neutral",  # Replace with actual bias tracking if available
-            snapshot=snapshot,
-            symbol=symbol
-        )
-
-        if event:
-            events.append(event)
-
-    return events
 
 @router.get("/bias/shift/multi", response_model=List[BiasShiftEvent])
 def get_multi_tf_bias_shift_events(
     symbols: List[str] = ["XAUUSD_i", "BTCUSD_i", "EURUSD_i"],
     timeframes: List[str] = ["M15", "H1", "H4"],
-    
 ):
-    structure_engine = StructureEngine(candle_engine, demand_engine=demand_engine)
-    events: List[BiasShiftEvent] = []
-
-    for symbol in symbols:
-        for tf in timeframes:
-            snapshot = structure_engine.get_snapshot(symbol, tf)
-            if not snapshot or not snapshot.structure_valid:
-                continue
-            
-            print({
-                "symbol": symbol,
-                "timeframe": tf,
-                "bias": snapshot.bias,
-                "structure_type": snapshot.structure_type,
-                "structure": getattr(snapshot, "structure", "missing"),
-                "structure_valid": snapshot.structure_valid,
-                "context_zone": snapshot.context_zone,
-                "context_level": snapshot.context_level
-            })
-
-            event = detect_bias_shift(prev_bias="Neutral", snapshot=snapshot, symbol=symbol)
-            if event:
-                print(f"{symbol} @ {tf} → BiasShiftEvent streamed")
-                events.append(event)
-            else:
-                print(f"{symbol} @ {tf} → No event returned")
-
-    return events
+    """Fix #6BK — retired, see get_bias_shift_events() above."""
+    return []
 
 @router.get("/diagnostics/style/snapshots")
 def get_style_snapshots():

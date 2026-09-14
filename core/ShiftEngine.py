@@ -175,31 +175,21 @@ class ShiftEngine:
         return self.last_shift_change.get((symbol, tf))
     
 def detect_bias_shift(prev_bias: str, snapshot: StructureSnapshot, symbol: str) -> Optional[BiasShiftEvent]:
+    """Fix #6BK — retired. Fix #6BJ's audit found this never actually
+    detected a bias shift: `prev_bias` was accepted but never read or
+    compared anywhere in this function's logic. The only real gate was
+    "is there currently a confirmed, valid structural event" -- a fact
+    the canonical /core/output `structure_events` block already reports,
+    correctly cached and batched, with no fabricated fields. Since there
+    was no previous-state tracking either, the same currently-confirmed
+    event would be re-reported as a "new" shift on every single call.
 
-        if snapshot.structure not in {"breakout", "reversal", "trend"}:
-            return None  # Only shift on meaningful structural zones
-
-        if not snapshot.structure_valid:
-            print(f"{symbol} structure invalid — skipping shift detection")
-            return None
-
-        suppression = [snapshot.suppression_reason] if snapshot.suppression else []
-
-        return BiasShiftEvent(
-            symbol=symbol,
-            timeframe=snapshot.timeframe,
-            previous_bias=prev_bias,
-            new_bias=snapshot.bias,
-            confirmed=not snapshot.suppression,
-            timestamp=snapshot.timestamp.isoformat(),
-            zone=snapshot.context_zone,
-            structure=snapshot.structure,
-            direction=snapshot.structure_direction,
-            momentum=snapshot.momentum,
-            confidence_drop=snapshot.confidence_drop,
-            suppression=suppression,
-            trigger=snapshot.structure_type
-        )
+    Always returns None now. Kept (not deleted) only so
+    `/core/bias/shift`/`/core/bias/shift/multi` keep a stable function to
+    call and so any other caller expecting this exact name/signature to
+    exist doesn't break on import. No state tracking added, no new bias
+    logic -- deliberately just a stub."""
+    return None
 
 
 
