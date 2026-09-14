@@ -49,6 +49,54 @@ def price_from_snapshot(snapshot: StrategySnapshot) -> Optional[float]:
     return None
 
 
+# Fix #6AT/#6AU — canonical momentum confidence ingredient, shared across
+# all 7 live Strategy plugins (audited: the momentum term is identical in
+# form and purpose everywhere it appears; only each plugin's other bonus
+# terms are strategy-specific). No plugin calls this yet -- Fix #6AU only
+# adds the helper.
+#
+# Only the two direction vocabularies actually held by a plugin's own
+# "committed trade direction" variable at the point it would call this are
+# accepted -- verified by reading all 7 plugin files, not guessed:
+#   Bullish/Bearish -- BiasContinuationScalpingStrategy/BiasContinuationSwingStrategy's
+#     `direction`, GroupedLastCandleBiasStrategy's `direction`,
+#     LastCandleBiasStrategy's `last_direction`/`shift_direction`
+#     (all sourced from StructureSnapshot.structure_direction or bias)
+#   long/short -- DoubleEngulfingStrategy's `direction`,
+#     ZoneContinuationStrategy's `direction`, ScalpingBiasCascade's
+#     `trade_direction` (the final trade side, post any reversal mapping)
+# Deliberately NOT case-insensitive and NOT extended to other vocabularies
+# used elsewhere in this repo (e.g. "uptrend"/"downtrend", "buy"/"sell") --
+# expected_direction is not optional and an unrecognized string is treated
+# exactly like "Neutral": zero, never guessed into one bucket or the other.
+_BULLISH_DIRECTIONS = {"Bullish", "long"}
+_BEARISH_DIRECTIONS = {"Bearish", "short"}
+
+
+def strategy_momentum_confidence(atr_normalized_momentum: Optional[float], expected_direction: str) -> float:
+    """Canonical, instrument-scale-independent momentum confidence in
+    [0, 1] -- Fix #6AT's audit: linear cap at 2.0 ATR (empirically low
+    saturation rate, ~9-13% live/rolling across FX/JPY/metals/crypto/
+    energy, unlike a 1.0 ATR cap's ~30-38%), agreement-gated against
+    expected_direction (never negative on disagreement, matching the same
+    pattern established for StyleSnapshot.compute_conviction() -- Fix
+    #6AK). None (ATR14 unavailable), exact zero momentum, an unrecognized
+    expected_direction, and sign disagreement all return 0.0 -- never
+    guessed, never negative.
+    """
+    if atr_normalized_momentum is None or atr_normalized_momentum == 0.0:
+        return 0.0
+    if expected_direction in _BULLISH_DIRECTIONS:
+        agrees = atr_normalized_momentum > 0
+    elif expected_direction in _BEARISH_DIRECTIONS:
+        agrees = atr_normalized_momentum < 0
+    else:
+        return 0.0
+    if not agrees:
+        return 0.0
+    return min(abs(atr_normalized_momentum) / 2.0, 1.0)
+
+
 class Strategy(ABC):
     @abstractmethod
     def react(
