@@ -6,10 +6,15 @@ BTCUSD_i's legacy-based momentum_conf drove signal_health.score_pct to
 
 Scope: ONLY momentum_conf (via _compute_signal_confidence()) migrates.
 momentum_color/momentum_pct (both the dead Output.py scheme and the live
-helper.py scheme), MAX_MOMENTUM, momentum_band, Alignment's own +/-0.3
-momentum vote, conviction, and compute_signal_health()'s averaging formula
-are all untouched by this fix -- tests below explicitly confirm they still
+helper.py scheme), momentum_band, Alignment's own +/-0.3 momentum vote,
+conviction, and compute_signal_health()'s averaging formula are all
+untouched by this fix -- tests below explicitly confirm they still
 behave as before.
+
+Fix #6AX later deleted the MAX_MOMENTUM constant this file used to compare
+against (fully orphaned by then -- its only live-code use, scheme A, was
+already dead at the time this fix landed, per test_dead_momentum_display_
+cleanup.py); this file's own comparison test was simplified accordingly.
 
 Run in isolation (the rest of /tests is broken on unrelated pre-existing
 imports -- see CLAUDE.md):
@@ -18,7 +23,6 @@ imports -- see CLAUDE.md):
 from core.Output.Output import (
     _compute_signal_confidence,
     MOMENTUM_CONF_ATR_REFERENCE,
-    MAX_MOMENTUM,
 )
 from core.Output.alignment_signal import compute_signal_health
 
@@ -27,13 +31,12 @@ from core.Output.alignment_signal import compute_signal_health
 # Constant / reference
 # ---------------------------------------------------------------------------
 
-def test_atr_reference_is_2_0_and_distinct_from_max_momentum_name():
+def test_atr_reference_is_2_0():
+    # Fix #6AB deliberately introduced its own constant, distinct from
+    # helper.py's MOMENTUM_PCT_ATR_REFERENCE and the (since Fix #6AX,
+    # deleted) legacy MAX_MOMENTUM -- same numeric value, different
+    # semantics/presentation paths.
     assert MOMENTUM_CONF_ATR_REFERENCE == 2.0
-    # Fix #6AB deliberately introduces its own constant rather than reusing
-    # MAX_MOMENTUM, even though both happen to equal 2.0 today -- they mean
-    # different things (legacy-momentum divisor vs. canonical-ATR reference)
-    # and MAX_MOMENTUM must keep governing the untouched legacy chain.
-    assert MOMENTUM_CONF_ATR_REFERENCE == MAX_MOMENTUM  # same value, different semantics/name
 
 
 def _scalping_snapshots(values: dict) -> dict:

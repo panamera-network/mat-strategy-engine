@@ -3,9 +3,9 @@ to canonical atr_normalized_momentum (Fix #6X/#6Y's audit conclusion:
 < 0.5 ATR = weak, [0.5, 1.0) ATR = moderate, >= 1.0 ATR = strong).
 
 Scope: ONLY momentum_band migrates. StyleSnapshot.momentum (legacy raw
-score), momentum_color/MAX_MOMENTUM, alignment's +/-0.3 check, conviction's
-/10 term, momentum_conf, and signal_health are all untouched by this fix —
-tests below explicitly confirm they still read the legacy raw value.
+score), momentum_color, alignment's +/-0.3 check, conviction's /10 term,
+momentum_conf, and signal_health are all untouched by this fix — tests
+below explicitly confirm they still read the legacy raw value.
 
 Run in isolation (the rest of /tests is broken on unrelated pre-existing
 imports — see CLAUDE.md):
@@ -258,13 +258,13 @@ def test_normalize_snapshot_omits_band_key_when_field_absent():
 def test_normalize_snapshot_no_longer_sets_momentum_color_dead_scheme_a_removed():
     """At the time this fix (#6Z) landed, _normalize_snapshot() also set
     snap_dict["momentum_color"] independently of momentum_band (via the
-    legacy raw `momentum` and MAX_MOMENTUM) -- that write was always
-    overwritten downstream by add_display_percentages() before reaching
-    any consumer (Fix #6AA/#6AC's live audits), and Fix #6AD removed it as
-    dead code. Reconfirmed here: momentum_band is unaffected by that
-    removal, and _normalize_snapshot() no longer produces a momentum_color
-    key at all -- helper.py's add_display_percentages() is now the only
-    place that sets it."""
+    legacy raw `momentum` and a since-deleted MAX_MOMENTUM constant --
+    Fix #6AX) -- that write was always overwritten downstream by
+    add_display_percentages() before reaching any consumer (Fix #6AA/#6AC's
+    live audits), and Fix #6AD removed it as dead code. Reconfirmed here:
+    momentum_band is unaffected by that removal, and _normalize_snapshot()
+    no longer produces a momentum_color key at all -- helper.py's
+    add_display_percentages() is now the only place that sets it."""
     from core.Output.Output import _normalize_snapshot
 
     class FakeSnap:

@@ -45,10 +45,9 @@ display_max_config = {
 # against the legacy raw, per-instrument-scale-dependent momentum score and
 # required two different constants for the same concept; a single
 # canonical ATR reference needs only one, shared by both scalping and
-# swing. Kept as its own named constant, distinct from MAX_MOMENTUM
-# (Output.py's now fully-unused Fix #6AA constant, its dead scheme A
-# removed by Fix #6AD) and MOMENTUM_CONF_ATR_REFERENCE (Fix #6AB's
-# momentum_conf) -- same numeric value today, separate presentation paths.
+# swing. Kept as its own named constant, distinct from Output.py's
+# MOMENTUM_CONF_ATR_REFERENCE (Fix #6AB's momentum_conf) -- same numeric
+# value today, separate presentation paths.
 MOMENTUM_PCT_ATR_REFERENCE = 2.0
 
 

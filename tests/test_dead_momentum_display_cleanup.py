@@ -1,8 +1,8 @@
 """Fix #6AD — targeted tests for removing dead momentum display legacy:
 
 1. The dead scheme A write in Output.py's _normalize_snapshot() (used to
-   set snap_dict["momentum_color"] from the legacy raw momentum via
-   MAX_MOMENTUM -- always overwritten downstream by helper.py's
+   set snap_dict["momentum_color"] from the legacy raw momentum via a
+   2.0 divisor -- always overwritten downstream by helper.py's
    add_display_percentages(), confirmed dead by Fix #6AA/#6AC's live
    audits before this fix removed it).
 2. The now-unreferenced display_max_config momentum entries (helper.py):
@@ -14,11 +14,16 @@ momentum_conf, signal_health, bias/strength display) is byte-for-byte
 identical to before, and that nothing else in the codebase referenced the
 removed constants/config.
 
+Fix #6AX later deleted the MAX_MOMENTUM constant itself (scheme A, its
+only ever live-code use, was already dead per this file's own tests --
+confirmed fully orphaned and removed as a separate cleanup); this file's
+own now-stale MAX_MOMENTUM-specific test was removed with it.
+
 Run in isolation (the rest of /tests is broken on unrelated pre-existing
 imports -- see CLAUDE.md):
     pytest tests/test_dead_momentum_display_cleanup.py -v
 """
-from core.Output.Output import _normalize_snapshot, MAX_MOMENTUM
+from core.Output.Output import _normalize_snapshot
 from core.Output.helper import display_max_config, get_display_max
 
 
@@ -51,13 +56,6 @@ def test_normalize_snapshot_momentum_rounding_still_applied():
 
     result = _normalize_snapshot(FakeSnap())
     assert result["momentum"] == 1.2346
-
-
-def test_max_momentum_constant_still_defined_but_unreferenced_live():
-    # Left defined (not part of this cleanup's explicit removal scope),
-    # but no live code path reads it any more -- confirmed by the test
-    # above (its only prior use, scheme A, is gone).
-    assert MAX_MOMENTUM == 2.0
 
 
 # ---------------------------------------------------------------------------

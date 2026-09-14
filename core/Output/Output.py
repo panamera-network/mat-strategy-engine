@@ -23,12 +23,6 @@ SCALPING_TFS = set(SCALPING_ORDER)
 SWING_TFS = [tf for tf in TIMEFRAMES if tf not in SCALPING_TFS]
 
 # Normalization thresholds — named instead of scattered magic numbers
-# Fix #6AD — MAX_MOMENTUM's only live-code use (the dead scheme A
-# momentum_color write in _normalize_snapshot(), overwritten downstream by
-# add_display_percentages()) has been removed. Left defined rather than
-# deleted since it isn't part of this cleanup's explicit scope; no live
-# code reads it any more.
-MAX_MOMENTUM = 2.0
 MAX_BIAS = 4.0
 ALIGNMENT_HISTORY_LIMIT = 10
 # Fix #6Z — canonical momentum display bands, in ATR units (Fix #6X/#6Y's
@@ -45,10 +39,8 @@ ATR_MOMENTUM_STRONG_THRESHOLD = 1.0
 # 100%. Chosen because it extends Fix #6Z's weak/moderate/strong ATR
 # landmarks (0.5/1.0) by one more step, landing exactly on
 # confidence_color's existing 25/50/75 tier boundaries at 0.5/1.0/1.5 ATR
-# (Fix #6AA's audit, Q6). Deliberately kept as its own named constant
-# rather than reusing MAX_MOMENTUM (same numeric value, different
-# presentation path) -- MAX_MOMENTUM's own legacy chain was since removed
-# entirely (Fix #6AD).
+# (Fix #6AA's audit, Q6). Deliberately its own named constant -- it
+# governs only momentum_conf's presentation path.
 MOMENTUM_CONF_ATR_REFERENCE = 2.0
 
 
@@ -92,7 +84,7 @@ def _normalize_snapshot(snap) -> dict:
 
     if "momentum" in snap_dict:
         # Fix #6AD — this block used to also set snap_dict["momentum_color"]
-        # here (confidence_color(abs(legacy momentum)/MAX_MOMENTUM*100)), but
+        # here (confidence_color(abs(legacy momentum)/2.0*100)), but
         # that write was always overwritten later by
         # add_display_percentages() (core/Output/helper.py, Fix #6AC) before
         # the value ever reached a consumer — confirmed dead by live
@@ -160,9 +152,10 @@ def _compute_signal_confidence(bias_ordered: dict, scalping_snapshots: dict, sca
     # physical maximum atr_normalized_momentum can reach (it stays
     # unclamped elsewhere, per Fix #6V) -- each per-tf pct is clamped to
     # 100 individually so one extreme reading can't drag the average past
-    # 100 on its own. Deliberately a separate constant from MAX_MOMENTUM,
-    # which still governs the untouched legacy momentum_color/momentum_pct
-    # chain (Fix #6AA's scheme A/C).
+    # 100 on its own. Deliberately a separate constant from helper.py's
+    # MOMENTUM_PCT_ATR_REFERENCE (Fix #6AC) -- same numeric value today,
+    # separate presentation paths (momentum_conf here vs. live
+    # momentum_pct/momentum_color there).
     mom_vals = [
         min(abs(scalping_snapshots[tf]["atr_normalized_momentum"]) / MOMENTUM_CONF_ATR_REFERENCE * 100, 100.0)
         for tf in SCALPING_ORDER

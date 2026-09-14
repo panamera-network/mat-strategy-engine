@@ -6,8 +6,8 @@ presentation reference instead of the old per-mode 50.0 (scalping) /
 
 Scope: ONLY the live momentum_pct/momentum_color in helper.py migrate.
 momentum_conf (Fix #6AB), momentum_band (Fix #6Z), the dead scheme A in
-Output.py's _normalize_snapshot(), MAX_MOMENTUM, display_max_config's
-momentum entries, Alignment, conviction, and Suppression/Strategy are all
+Output.py's _normalize_snapshot(), display_max_config's momentum
+entries, Alignment, conviction, and Suppression/Strategy are all
 untouched by this fix -- tests below explicitly confirm several of these.
 
 Run in isolation (the rest of /tests is broken on unrelated pre-existing
@@ -244,14 +244,15 @@ def test_bias_pct_unaffected_by_this_fix():
 def test_output_py_scheme_a_removed_and_momentum_conf_untouched_by_this_fix():
     # At the time Fix #6AC landed, dead scheme A (Output.py's
     # _normalize_snapshot()) was still present but fully overwritten
-    # downstream. Fix #6AD has since removed it as a separate cleanup;
-    # confirm here that removal didn't touch momentum_conf's own constant,
-    # and that _normalize_snapshot() no longer produces a momentum_color
-    # key at all (helper.py's add_display_percentages() is now the only
-    # place that sets it -- see test_live_momentum_pct_color_bounded_and_
-    # matches_formula_across_classes below for end-to-end confirmation).
-    from core.Output.Output import MAX_MOMENTUM, MOMENTUM_CONF_ATR_REFERENCE, _normalize_snapshot
-    assert MAX_MOMENTUM == 2.0  # left defined, just no longer read by any live code
+    # downstream. Fix #6AD has since removed it as a separate cleanup (and
+    # Fix #6AX later deleted the now-fully-orphaned MAX_MOMENTUM constant
+    # that dead block used to read); confirm here that removal didn't
+    # touch momentum_conf's own constant, and that _normalize_snapshot()
+    # no longer produces a momentum_color key at all (helper.py's
+    # add_display_percentages() is now the only place that sets it -- see
+    # test_live_momentum_pct_color_bounded_and_matches_formula_across_classes
+    # below for end-to-end confirmation).
+    from core.Output.Output import MOMENTUM_CONF_ATR_REFERENCE, _normalize_snapshot
     assert MOMENTUM_CONF_ATR_REFERENCE == 2.0  # Fix #6AB's momentum_conf constant, unaffected
 
     class FakeSnap:
