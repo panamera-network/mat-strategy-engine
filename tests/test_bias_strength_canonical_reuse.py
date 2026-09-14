@@ -213,12 +213,19 @@ def test_live_bias_strength_equals_structure_strength():
 
 
 def test_live_suppression_reads_same_canonical_value_as_bias():
-    """SuppressionEngine.detect_suppression() reads structure.strength
-    directly; bias now reuses that exact same value — so the two can never
-    disagree about whether strength is low, unlike before this fix."""
+    """At the time this fix landed, SuppressionEngine.detect_suppression()
+    read structure.strength directly inside get_snapshot(), and bias reused
+    that exact same value — so the two could never disagree about whether
+    strength is low. Fix #6AO later retired detect_suppression() from the
+    live get_snapshot() path entirely (structure.suppression/
+    suppression_reason are now always False/"" -- Fix #6AN's audit found
+    ~83-94% suppression driven almost entirely by this one strength<4
+    condition, with no evidence the blocked candidates were worse). This
+    test's own assertion is about bias/structure strength agreement, not
+    about detect_suppression() being invoked, so it still holds -- updated
+    docstring/import only, no behavior change."""
     import api.core_router as cr
     from core.candle_cache import CandleCache
-    from core.SuppressionEngine import detect_suppression
 
     symbol = "XAUUSD_i"
     timeframes = ["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1"]
@@ -235,9 +242,10 @@ def test_live_suppression_reads_same_canonical_value_as_bias():
         suppression_would_trigger_on_strength = structure.strength < 4
         bias_strength_would_trigger_same = bias.strength_diagnostic.strength < 4
         assert suppression_would_trigger_on_strength == bias_strength_would_trigger_same
-        # detect_suppression() itself already ran inside get_snapshot() and
-        # set structure.suppression/suppression_reason off this same value.
-        _ = detect_suppression  # imported to document the shared source, not re-invoked here
+        # Fix #6AO — the legacy gate no longer runs live; confirm the
+        # always-inactive canonical state directly.
+        assert structure.suppression is False
+        assert structure.suppression_reason == ""
 
     assert checked_any
 

@@ -7,7 +7,6 @@ from core.FVGEngine import detect_fvg
 from core.MomentumEngine import MomentumEngine
 from core.OrderBlockEngine import detect_order_blocks
 from core.StrengthEngine import StrengthEngine
-from core.SuppressionEngine import detect_suppression
 from core.core_models import PriceSnapshot, StructureSnapshot
 from core.structure_utils import (
     SWING_LOOKBACK,
@@ -156,9 +155,24 @@ class StructureEngine:
         snapshot.body_ratio = strength_diag.avg_body_ratio
         snapshot.momentum_slope = strength_diag.momentum_slope
 
-        suppression_reason = detect_suppression(snapshot)
-        snapshot.suppression_reason = suppression_reason or ""
-        snapshot.suppression = suppression_reason is not None
+        # Fix #6AO — legacy detect_suppression() gate retired from the live
+        # path. Fix #6AN's audit found: 83-94% suppression rate (live and
+        # rolling-historical), 96-99% of it from the single condition
+        # (strength < 4) Fix #6P/#6Q already found does not discriminate
+        # good setups from bad; no evidence the blocked candidates were
+        # systematically worse (Fix #6AN Q4/Q5, reinforced by Fix #6AM's
+        # finding that extreme ATR momentum correlates with MORE valid
+        # structural events, not fewer); no hidden safety/execution
+        # consumer depends on it (Fix #6AN Q6 -- this repo has no
+        # execution layer at all). suppression/suppression_reason are
+        # preserved as always-inactive fields for API/backward
+        # compatibility -- SuppressionEngine.py, its detect_suppression()
+        # function, and its orphaned helper functions are untouched; this
+        # is the one live call site that stops invoking the gate. No
+        # replacement threshold, body_dominance/conviction/ATR-extreme/
+        # pre_break_trend gate, or any other new condition is introduced.
+        snapshot.suppression_reason = ""
+        snapshot.suppression = False
 
         structure_map = {
             "BOS": "breakout",
