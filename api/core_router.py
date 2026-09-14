@@ -38,6 +38,16 @@ structure_engine = StructureEngine(candle_engine, demand_engine=demand_engine)
 bias_engine = BiasEngine(candle_engine, strength_engine, structure_engine=structure_engine)
 momentum_engine = MomentumEngine(candle_engine)
 shift_engine = ShiftEngine(candle_engine)
+# Fix #6BQ — dedicated ShiftEngine instance for GET /core/diagnostics/style/
+# snapshots only. Fix #6BP's audit proved the canonical `shift_engine`
+# singleton's current_shift_direction/last_shift_change bookkeeping is
+# shared per (symbol, tf) regardless of which route calls into it -- an
+# uncached call through this diagnostics route could alter the `duration`
+# canonical /core/output and /core/slim later report for the same pair.
+# A separate, persistent singleton (not a fresh per-request instance) gives
+# this route its own independent duration continuity across calls without
+# ever touching the canonical instance's state.
+diagnostics_shift_engine = ShiftEngine(candle_engine)
 
 @router.get("/symbols")
 def get_supported_symbols():
@@ -120,16 +130,25 @@ def get_multi_tf_bias_shift_events(
 
 @router.get("/diagnostics/style/snapshots")
 def get_style_snapshots():
-    print(type(candle_engine))                 # <class '...CandleEngine'>
-    print(type(shift_engine.candle_engine))    # <class '...CandleEngine'>
-    # Build snapshot payload
+    """Fix #6BQ — retrofitted with a request-scoped CandleCache (same
+    pattern as /core/output) so the full 36x9 sweep reuses one batch fetch
+    per (symbol, tf) instead of every engine call hitting MT5
+    independently, and switched to the dedicated `diagnostics_shift_engine`
+    instance so this route can no longer alter canonical /core/output's or
+    /core/slim's `duration` for any (symbol, tf) pair (Fix #6BP's audit).
+    Response shape, route path, and input behavior are unchanged -- no
+    normalization retrofit, no new presentation fields."""
+    cache = CandleCache(candle_engine)
+    cache.fetch_all(SYMBOLS, TIMEFRAMES, count=100)
+
     result = build_multi_symbol_snapshot(
         bias_engine=bias_engine,
         candle_engine=candle_engine,
         momentum_engine=momentum_engine,
         demand_engine=demand_engine,
-        shift_engine=shift_engine,
-        structure_engine=structure_engine
+        shift_engine=diagnostics_shift_engine,
+        structure_engine=structure_engine,
+        cache=cache
     )
 
     return result

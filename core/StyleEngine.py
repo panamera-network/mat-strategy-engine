@@ -97,13 +97,20 @@ def build_multi_symbol_snapshot(
     momentum_engine,
     demand_engine,
     structure_engine,
-    shift_engine
+    shift_engine,
+    cache=None
 ) -> Dict[str, Any]:
+    # Fix #6BQ — optional request-scoped CandleCache, threaded through to
+    # get_bias_map() and every get_style_snapshot() call below so the full
+    # 36x9 sweep reuses one batch fetch per (symbol, tf) instead of each
+    # engine call hitting MT5 independently. None (any caller that doesn't
+    # pass one) behaves exactly as before -- every downstream call already
+    # accepts cache=None as its default.
     result = {}
 
     for symbol in SYMBOLS:
         try:
-            bias_map = bias_engine.get_bias_map(symbol, TIMEFRAMES)
+            bias_map = bias_engine.get_bias_map(symbol, TIMEFRAMES, cache=cache)
 
             scalping_snapshots = {}
             swing_snapshots = {}
@@ -120,7 +127,8 @@ def build_multi_symbol_snapshot(
                     candle_engine=candle_engine,
                     momentum_engine=momentum_engine,
                     demand_engine=demand_engine,
-                    structure_engine=structure_engine
+                    structure_engine=structure_engine,
+                    cache=cache
                 )
 
                 if mode == "scalping":
