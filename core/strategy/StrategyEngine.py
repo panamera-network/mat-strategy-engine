@@ -35,7 +35,9 @@ def to_strategy_snapshot(structure: StructureSnapshot) -> StrategySnapshot:
         current_low=structure.current_low,
         is_last_bias_candle=getattr(structure, "is_last_bias_candle", False),
         engulfing_sequence=getattr(structure, "engulfing_sequence", None),
-        engulfing_strength=getattr(structure, "engulfing_strength", None)
+        engulfing_strength=getattr(structure, "engulfing_strength", None),
+        # Fix #6AS — straight copy, no recomputation, no new fetch.
+        atr_normalized_momentum=getattr(structure, "atr_normalized_momentum", None),
     )
 
 

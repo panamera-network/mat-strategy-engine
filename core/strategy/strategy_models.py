@@ -25,6 +25,18 @@ class StrategySnapshot:
     is_last_bias_candle: bool = False
     engulfing_sequence: Optional[List[str]] = None
     engulfing_strength: Optional[str] = None
+    # Fix #6AS — canonical, instrument-scale-independent momentum, copied
+    # straight from StructureSnapshot.atr_normalized_momentum (Fix #6V).
+    # Additive only; the legacy `momentum` field above (clamped [0,10],
+    # per-instrument price-unit) is untouched and still populated exactly
+    # as before. None whenever the engine didn't have enough candles for a
+    # genuine ATR14 -- never backfilled/guessed. No Strategy plugin reads
+    # this yet (Fix #6AR's audit) -- this fix only exposes the value.
+    # POST /core/evaluate's raw-JSON-body construction
+    # (StrategySnapshot(**snapshot_data)) omitting this key simply falls
+    # through to this default (None) -- no fallback from legacy `momentum`
+    # is invented for a caller that doesn't supply it.
+    atr_normalized_momentum: Optional[float] = None
 
 def price_from_snapshot(snapshot: StrategySnapshot) -> Optional[float]:
     """A representative chart price for a signal — for placing a marker/zone
