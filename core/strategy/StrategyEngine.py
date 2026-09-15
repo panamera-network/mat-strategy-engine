@@ -106,6 +106,8 @@ def to_strategy_snapshot(structure: StructureSnapshot) -> StrategySnapshot:
         # (dataclass -> plain dict per entry, same conversion Output.py
         # already uses for snr_levels), no recomputation, no new fetch.
         recent_candles=[asdict(c) for c in (getattr(structure, "recent_candles", None) or [])],
+        # Fix #7L — straight copy, no recomputation, no new fetch.
+        pre_break_trend=getattr(structure, "pre_break_trend", None),
     )
 
 

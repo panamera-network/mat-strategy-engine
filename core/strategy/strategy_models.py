@@ -71,6 +71,21 @@ class StrategySnapshot:
     # recomputing candle history itself. Empty list when there aren't
     # enough candles yet, never guessed.
     recent_candles: Optional[List[Dict]] = None
+    # Fix #7L — canonical pre-break trend evidence, copied straight from
+    # StructureSnapshot.pre_break_trend (Fix #6C): the two-swing trend read
+    # BEFORE the current structure event's break was evaluated -- exactly
+    # what BOS/CHoCH was decided against. "Neutral" is a real, meaningful
+    # value (a break with no established trend either way, i.e. a BOS
+    # label that is a default/fallback rather than a substantiated
+    # continuation claim), not a missing-evidence placeholder. None only
+    # when there's no confirmed structure event at all, same convention as
+    # event_timestamp/event_index/event_broken_level above. Additive only,
+    # no recomputation, no new fetch -- needed so a Strategy plugin can
+    # tell a genuine trend-continuation BOS (structure_direction agrees
+    # with pre_break_trend) apart from a BOS-from-Neutral default without
+    # recomputing structure evidence itself. No existing plugin reads this
+    # yet.
+    pre_break_trend: Optional[str] = None
 
 def price_from_snapshot(snapshot: StrategySnapshot) -> Optional[float]:
     """A representative chart price for a signal — for placing a marker/zone
