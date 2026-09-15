@@ -1,13 +1,33 @@
 from typing import Dict, Optional
 
 from core.strategy.strategy_models import (
-    Strategy, StrategySnapshot, normalize_confidence, price_from_snapshot, strategy_momentum_confidence,
+    Strategy, StrategySnapshot, price_from_snapshot, strategy_momentum_confidence,
 )
 
 
 ANCHOR_TFS = ["H1", "H4"]
 TRIGGER_TFS = ["M5", "M15"]
 STRUCTURE_TRIGGERS = {"BOS", "CHOCH", "breakout", "reversal"}
+# Fix #7B — canonical replacement for the retired
+# `normalize_confidence(snapshot.momentum) >= 0.45` fallback trigger (raw,
+# unsigned, per-instrument-scale, direction-blind). Empirically compared
+# against a 3,990-row rolling sample across FX/JPY/Metals/Crypto/Energy at
+# M15 (see Fix #7B's audit): a 0.5 ATR magnitude threshold passed 59.6%-
+# 70.5% of samples depending on instrument class (still fairly uniform,
+# but nearly double the old formula's ~34.5% overall magnitude-only base
+# rate); a 1.0 ATR threshold passed a tightly uniform 29.8%-37.9% across
+# every class -- both far more uniform than the old formula's 0%-84.7%
+# instrument-scale-broken spread, but 1.0 ATR was chosen because its
+# overall base rate (34.1%) most closely preserves the old gate's original
+# selectivity while fixing the scale defect, and it matches the same
+# "strong momentum" ATR boundary already established for Alignment's vote
+# threshold (Fix #6AF) and the weak/moderate/strong bands (Fix #6Z) --
+# 0.5 in strategy_momentum_confidence() terms, since that helper divides
+# by 2.0 ATR. Real-world pass rate is materially lower than these
+# magnitude-only figures once direction-agreement gating is applied on
+# top (this is a fallback path -- it must stay rarer than the primary
+# structure trigger, not replace it).
+MOMENTUM_FALLBACK_CONFIDENCE_MIN = 0.5
 
 
 class BiasContinuationScalpingStrategy(Strategy):
@@ -61,7 +81,13 @@ class BiasContinuationScalpingStrategy(Strategy):
         if snapshot.structure_valid and snapshot.structure_type in STRUCTURE_TRIGGERS:
             if snapshot.structure_direction in {direction, "neutral", ""}:
                 return True
-        return self._has_confluence(snapshot, trade_side) and normalize_confidence(snapshot.momentum) >= 0.45
+        # Fix #7B — canonical, direction-agreement-gated fallback (see
+        # MOMENTUM_FALLBACK_CONFIDENCE_MIN above). The structure trigger
+        # above remains the primary path and is checked first; this
+        # fallback only fires when no confirmed structural event exists.
+        return self._has_confluence(snapshot, trade_side) and strategy_momentum_confidence(
+            snapshot.atr_normalized_momentum, direction
+        ) >= MOMENTUM_FALLBACK_CONFIDENCE_MIN
 
     def _has_confluence(self, snapshot: StrategySnapshot, trade_side: str) -> bool:
         if trade_side == "long":

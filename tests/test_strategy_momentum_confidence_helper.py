@@ -153,19 +153,25 @@ def test_expected_direction_is_not_optional():
         strategy_momentum_confidence(1.0)
 
 
-def test_no_live_plugin_calls_the_new_helper_yet():
-    """Fix #6AV later migrated the 4 composite plugins (BiasContinuation*/
-    DoubleEngulfing/ZoneContinuation) to call this helper -- updated here to
-    check only the 3 raw-confidence plugins Fix #6AV deliberately left
-    untouched, still pending their own migration."""
+def test_all_seven_live_plugins_now_call_the_canonical_helper():
+    """Fix #6AV migrated the 4 composite plugins (BiasContinuation*/
+    DoubleEngulfing/ZoneContinuation) to call this helper. Fix #7B
+    completed the migration for the remaining 3 (ScalpingBiasCascade/
+    GroupedLastCandleBiasStrategy/LastCandleBiasStrategy) -- see
+    tests/test_fix_7b_canonical_strategy_momentum_migration.py for that
+    fix's own dedicated coverage. All 7 live Strategy plugins now call
+    strategy_momentum_confidence() for their momentum ingredient; none
+    remain on raw/legacy momentum."""
     plugin_dir = pathlib.Path("core/strategy")
     plugin_files = [
+        "BiasContinuationScalpingStrategy.py", "BiasContinuationSwingStrategy.py",
+        "DoubleEngulfingStrategy.py", "ZoneContinuationStrategy.py",
         "ScalpingBiasCascade.py", "GroupedLastCandleBiasStrategy.py",
         "LastCandleBiasStrategy.py",
     ]
     for name in plugin_files:
         text = (plugin_dir / name).read_text(encoding="utf-8")
-        assert "strategy_momentum_confidence" not in text, f"{name} already calls the new helper -- out of this fix's scope"
+        assert "strategy_momentum_confidence(" in text, f"{name} does not call the canonical helper"
 
 
 def test_normalize_confidence_untouched():

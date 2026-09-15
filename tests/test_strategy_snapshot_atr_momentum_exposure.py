@@ -17,7 +17,7 @@ import dataclasses
 from datetime import datetime, timezone
 
 from core.core_models import StructureSnapshot
-from core.strategy.strategy_models import StrategySnapshot
+from core.strategy.strategy_models import StrategySnapshot, strategy_momentum_confidence
 from core.strategy.StrategyEngine import to_strategy_snapshot
 
 
@@ -185,35 +185,42 @@ def test_context_snapshots_also_backward_compatible():
 # unaffected by this fix (none of them read the new field yet).
 # ---------------------------------------------------------------------------
 
-def test_no_live_plugin_reads_new_field_yet():
+def test_all_seven_live_plugins_now_read_the_canonical_field():
     """Fix #6AR's audit found none of the 7 live plugins read this field.
-    Fix #6AV later migrated the 4 composite plugins (BiasContinuation*/
-    DoubleEngulfing/ZoneContinuation) to read it via the canonical helper --
-    updated here to check only the 3 raw-confidence plugins Fix #6AV
-    deliberately left untouched, still pending their own migration."""
+    Fix #6AV migrated the 4 composite plugins (BiasContinuation*/
+    DoubleEngulfing/ZoneContinuation) to read it via the canonical helper.
+    Fix #7B completed the migration for the remaining 3
+    (ScalpingBiasCascade/GroupedLastCandleBiasStrategy/
+    LastCandleBiasStrategy) -- see
+    tests/test_fix_7b_canonical_strategy_momentum_migration.py for that
+    fix's own dedicated coverage. All 7 live plugins now read
+    atr_normalized_momentum; none remain on raw/legacy momentum alone."""
     import pathlib
     plugin_dir = pathlib.Path("core/strategy")
     plugin_files = [
+        "BiasContinuationScalpingStrategy.py", "BiasContinuationSwingStrategy.py",
+        "DoubleEngulfingStrategy.py", "ZoneContinuationStrategy.py",
         "ScalpingBiasCascade.py", "GroupedLastCandleBiasStrategy.py",
         "LastCandleBiasStrategy.py",
     ]
     for name in plugin_files:
         text = (plugin_dir / name).read_text(encoding="utf-8")
-        assert "atr_normalized_momentum" not in text, f"{name} already reads the new field -- out of this fix's scope"
+        assert "atr_normalized_momentum" in text, f"{name} does not read the canonical field"
 
 
-def test_strategy_signal_output_identical_with_and_without_new_field():
-    """Same structure snapshot, only difference being atr_normalized_momentum
-    present vs absent -- the resulting Strategy signal (or lack of one) must
-    be byte-identical either way, for a plugin that doesn't read it.
-
-    Fix #6AV migrated BiasContinuationScalpingStrategy (this test's original
-    example) to read the new field via the canonical helper, so its output
-    now legitimately differs with/without it -- that plugin's own dedicated
-    coverage lives in test_composite_strategy_momentum_confidence_migration.py.
-    Swapped to LastCandleBiasStrategy, one of the 3 raw-confidence plugins
-    Fix #6AV deliberately left untouched, to keep testing the same
-    invariant this test was written for."""
+def test_strategy_signal_confidence_now_legitimately_differs_with_new_field():
+    """This test originally proved a plugin's output was byte-identical
+    with/without atr_normalized_momentum, for whichever plugin didn't yet
+    read the field. Fix #6AV migrated BiasContinuationScalpingStrategy
+    (this test's original example); Fix #7B migrated the last 3 remaining
+    plugins, including LastCandleBiasStrategy (this test's second example)
+    -- see tests/test_fix_7b_canonical_strategy_momentum_migration.py for
+    that fix's own dedicated coverage. All 7 live plugins now legitimately
+    produce different confidence with vs without this field, so there is
+    no remaining plugin left to demonstrate the original "identical either
+    way" invariant against. This test now proves the inverse instead:
+    eligibility (whether a signal fires at all) is unaffected by the
+    field's presence, but confidence correctly differs once eligible."""
     from core.strategy.LastCandleBiasStrategy import LastCandleBiasStrategy
 
     def make_event(atr):
@@ -243,7 +250,13 @@ def test_strategy_signal_output_identical_with_and_without_new_field():
 
     result_without = strat.react(event_without, context_without)
     result_with = strat.react(event_with, context_with)
-    assert result_without == result_with
+    assert result_without is not None and result_with is not None  # eligibility unaffected
+    assert result_without["confidence"] == 0.0  # None atr -> strategy_momentum_confidence(...) == 0.0
+    assert result_with["confidence"] == strategy_momentum_confidence(2.5, "Bullish")
+    assert result_with["confidence"] != result_without["confidence"]
+    without_minus_confidence = {k: v for k, v in result_without.items() if k != "confidence"}
+    with_minus_confidence = {k: v for k, v in result_with.items() if k != "confidence"}
+    assert without_minus_confidence == with_minus_confidence  # everything else identical
 
 
 # ---------------------------------------------------------------------------

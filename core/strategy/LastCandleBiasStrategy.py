@@ -1,5 +1,5 @@
 from typing import Dict, Optional
-from core.strategy.strategy_models import Strategy, StrategySnapshot, price_from_snapshot
+from core.strategy.strategy_models import Strategy, StrategySnapshot, price_from_snapshot, strategy_momentum_confidence
 
 
 class LastCandleBiasStrategy(Strategy):
@@ -37,13 +37,19 @@ class LastCandleBiasStrategy(Strategy):
         last_direction = anchor_snapshot.structure_direction
         shift_direction = shift_snapshot.structure_direction
 
+        # Fix #7B — canonical, direction-relative confidence, replacing the
+        # raw (unsigned, per-instrument-scale) shift_snapshot.momentum
+        # previously returned unmodified. `last_direction`
+        # ("Bullish"/"Bearish") is the already-resolved anchor direction
+        # used for the eligibility check above. Anchor/shift-TF eligibility
+        # logic is untouched.
         if last_direction == shift_direction and not shift_snapshot.suppression:
             return {
                 "symbol": event.symbol,
                 "timeframe": event.timeframe,
                 "direction": "long" if last_direction == "Bullish" else "short",
                 "reason": f"Last candle bias confirmed by {shift_tf} shift candle",
-                "confidence": shift_snapshot.momentum,
+                "confidence": strategy_momentum_confidence(shift_snapshot.atr_normalized_momentum, last_direction),
                 "trigger": shift_snapshot.structure_type,
                 "timestamp": event.timestamp,
                 "price": price_from_snapshot(shift_snapshot)

@@ -1,5 +1,5 @@
 from typing import Dict, List, Optional, Tuple
-from core.strategy.strategy_models import Strategy, StrategySnapshot, price_from_snapshot
+from core.strategy.strategy_models import Strategy, StrategySnapshot, price_from_snapshot, strategy_momentum_confidence
 
 
 class GroupedLastCandleBiasStrategy(Strategy):
@@ -51,12 +51,18 @@ class GroupedLastCandleBiasStrategy(Strategy):
                 if not valid_filter:
                     return None
 
+        # Fix #7B — canonical, direction-relative confidence, replacing the
+        # raw (unsigned, per-instrument-scale) shift_snap.momentum
+        # previously returned unmodified. `direction` ("Bullish"/"Bearish")
+        # is the already-resolved group-alignment direction from
+        # _resolve_group() above. All MTF/group/range eligibility logic
+        # above is untouched.
         return {
             "symbol": symbol,
             "timeframe": event.timeframe,
             "direction": "long" if direction == "Bullish" else "short",
             "reason": f"Grouped last candle bias ({group_label}) confirmed by {shift_tf} shift candle",
-            "confidence": shift_snap.momentum,
+            "confidence": strategy_momentum_confidence(shift_snap.atr_normalized_momentum, direction),
             "trigger": shift_snap.structure_type,
             "timestamp": event.timestamp,
             "price": price_from_snapshot(shift_snap),

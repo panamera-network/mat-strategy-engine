@@ -1,6 +1,6 @@
 import logging
 from typing import Dict, Optional
-from core.strategy.strategy_models import Strategy, StrategySnapshot, price_from_snapshot
+from core.strategy.strategy_models import Strategy, StrategySnapshot, price_from_snapshot, strategy_momentum_confidence
 
 logger = logging.getLogger(__name__)
 
@@ -29,12 +29,19 @@ class ScalpingBiasCascade(Strategy):
                 aligned and m1 and m1.bias == flip_bias and not m1.suppression
                 and snapshot.structure_type == "CHOCH"
             ):
+                # Fix #7B — canonical, direction-relative confidence,
+                # replacing the raw (unsigned, per-instrument-scale)
+                # snapshot.momentum previously returned unmodified.
+                # trade_direction ("long"/"short") is the already-resolved
+                # final trade side, exactly the vocabulary
+                # strategy_momentum_confidence() expects. Eligibility above
+                # is untouched.
                 return {
                     "symbol": symbol,
                     "timeframe": snapshot.timeframe,
                     "direction": trade_direction,
                     "reason": "Scalping bias cascade",
-                    "confidence": snapshot.momentum,
+                    "confidence": strategy_momentum_confidence(snapshot.atr_normalized_momentum, trade_direction),
                     "trigger": snapshot.structure_type,
                     "timestamp": snapshot.timestamp,
                     "price": price_from_snapshot(snapshot)

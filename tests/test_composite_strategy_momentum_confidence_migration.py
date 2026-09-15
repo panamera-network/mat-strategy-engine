@@ -338,18 +338,28 @@ def test_zone_confidence_within_cap():
 # gate, untouched, out of this fix's scope).
 # ---------------------------------------------------------------------------
 
-def test_only_scalping_plugin_still_imports_normalize_confidence():
+def test_no_plugin_still_imports_normalize_confidence_at_time_of_this_fix():
+    """Fix #7B migrated BiasContinuationScalpingStrategy's own remaining
+    fallback gate off the old formula onto the canonical
+    strategy_momentum_confidence() -- see
+    tests/test_fix_7b_canonical_strategy_momentum_migration.py for that
+    fix's own dedicated coverage. None of these 4 files import (and so
+    can't call) the old helper any more -- a historical comment mentioning
+    its name/call-syntax is fine and expected, so this checks the actual
+    `ast`-parsed import list rather than a bare text substring (which a
+    comment could trivially fool -- as its predecessor test was)."""
+    import ast
     import pathlib
     plugin_dir = pathlib.Path("core/strategy")
-    still_uses = {
-        "BiasContinuationScalpingStrategy.py": True,   # _trigger_matches eligibility gate, untouched
-        "BiasContinuationSwingStrategy.py": False,
-        "DoubleEngulfingStrategy.py": False,
-        "ZoneContinuationStrategy.py": False,
-    }
-    for name, expected in still_uses.items():
-        text = (plugin_dir / name).read_text(encoding="utf-8")
-        assert ("normalize_confidence" in text) == expected, f"{name} normalize_confidence usage changed unexpectedly"
+    for name in ["BiasContinuationScalpingStrategy.py", "BiasContinuationSwingStrategy.py",
+                 "DoubleEngulfingStrategy.py", "ZoneContinuationStrategy.py"]:
+        tree = ast.parse((plugin_dir / name).read_text(encoding="utf-8"))
+        imported_names = {
+            alias.asname or alias.name
+            for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)
+            for alias in node.names
+        }
+        assert "normalize_confidence" not in imported_names, f"{name} still imports normalize_confidence"
 
 
 def test_all_four_plugins_import_canonical_helper():
@@ -361,20 +371,30 @@ def test_all_four_plugins_import_canonical_helper():
         assert "strategy_momentum_confidence" in text
 
 
-def test_scalping_eligibility_gate_still_functions_unchanged():
-    """BiasContinuationScalpingStrategy's normalize_confidence(momentum)>=0.45
-    eligibility fallback path (structure invalid, relying on confluence +
-    momentum threshold) is explicitly out of this fix's scope -- confirm it
-    still gates exactly as before."""
+def test_scalping_eligibility_fallback_now_gates_on_canonical_atr_threshold():
+    """Fix #7B replaced BiasContinuationScalpingStrategy's raw, unsigned,
+    direction-blind normalize_confidence(snapshot.momentum) >= 0.45
+    fallback (structure invalid, relying on confluence + momentum) with
+    strategy_momentum_confidence(atr_normalized_momentum, direction) >=
+    MOMENTUM_FALLBACK_CONFIDENCE_MIN (0.5, i.e. ~1.0 ATR agreement --
+    empirically chosen, see that fix's own module for the full comparison
+    against a 0.5 ATR candidate across instrument classes). This test's
+    original premise (this path is out of scope, gates on raw momentum) no
+    longer holds -- see
+    tests/test_fix_7b_canonical_strategy_momentum_migration.py for that
+    fix's full dedicated coverage, including the wrong-direction case this
+    migration specifically fixes (raw momentum had no direction at all)."""
     strat = BiasContinuationScalpingStrategy()
     ctx = _scalp_context("Bullish")
-    # structure invalid -> falls to confluence+momentum-threshold path
+    # structure invalid -> falls to the confluence+momentum-threshold path
     below_threshold = strat.react(
-        snap(structure_valid=False, structure_type="None", momentum=4.0, atr_normalized_momentum=1.0), ctx,
-    )  # normalize_confidence(4.0) = 0.4 < 0.45 -> ineligible
+        snap(structure_valid=False, structure_type="None", momentum=9.9, atr_normalized_momentum=0.8), ctx,
+    )  # strategy_momentum_confidence(0.8, "Bullish") = 0.4 < 0.5 -> ineligible
+       # (note: old raw momentum=9.9 would have passed the retired formula easily)
     above_threshold = strat.react(
-        snap(structure_valid=False, structure_type="None", momentum=5.0, atr_normalized_momentum=1.0), ctx,
-    )  # normalize_confidence(5.0) = 0.5 >= 0.45 -> eligible
+        snap(structure_valid=False, structure_type="None", momentum=0.1, atr_normalized_momentum=1.2), ctx,
+    )  # strategy_momentum_confidence(1.2, "Bullish") = 0.6 >= 0.5 -> eligible
+       # (note: old raw momentum=0.1 would have failed the retired formula)
     assert below_threshold is None
     assert above_threshold is not None
 
