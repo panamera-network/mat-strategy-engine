@@ -552,11 +552,27 @@ def test_standard_output_fields_present():
         assert key in result
 
 
-def test_strategy_engine_discovers_twelve_strategies_now():
+def test_strategy_engine_discovers_mitigation_second_touch_strategy():
+    """Originally asserted the discovered count equals exactly 12 -- Fix
+    #7O later added a genuinely new 13th strategy
+    (MomentumExpansionStrategy), which made that exact-count snapshot
+    stale (a real, intended addition, not a regression -- see
+    tests/test_fix_7o_momentum_expansion_strategy_v1.py::test_strategy_engine_discovers_thirteen_strategies_now
+    for that fix's own count assertion). Rewritten to check the actual
+    invariant this test exists for -- MitigationSecondTouchStrategy is
+    discovered alongside the original 11 -- rather than a total count
+    that any future new strategy would otherwise make stale again."""
     from core.strategy.StrategyEngine import StrategyEngine
     engine = StrategyEngine()
-    assert len(engine.strategies) == 12
     assert "MitigationSecondTouchStrategy" in engine.enabled
+    existing_eleven = {
+        "BiasContinuationScalpingStrategy", "BiasContinuationSwingStrategy",
+        "DoubleEngulfingStrategy", "ZoneContinuationStrategy",
+        "ScalpingBiasCascade", "GroupedLastCandleBiasStrategy", "LastCandleBiasStrategy",
+        "StructureReversalStrategy", "IPCStrategy", "TrendContinuationStrategy",
+        "FreshZoneReactionStrategy",
+    }
+    assert existing_eleven <= set(engine.enabled.keys())
 
 
 def test_existing_eleven_strategies_still_discovered():
