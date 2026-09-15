@@ -112,6 +112,23 @@ def _normalize_snapshot_map(snapshot_map: dict) -> dict:
     return {tf: _normalize_snapshot(snap) for tf, snap in snapshot_map.items()}
 
 
+def _canonical_structure_bias(bias_label: str) -> str:
+    """Fix #7C — maps BiasEngine.evaluate_bias()'s own "uptrend"/
+    "downtrend"/"neutral" vocabulary onto the "Bullish"/"Bearish"/
+    "Neutral" vocabulary StructureSnapshot.bias/StrategySnapshot.bias and
+    every Strategy plugin already expect. Not a new formula -- this is
+    the exact inverse of the mapping BiasEngine.evaluate_bias() itself
+    already performs internally when deriving bias_label from a confirmed
+    BOS/CHoCH's structure_direction ("uptrend" if direction == "Bullish"
+    else "downtrend"). Any unrecognized label maps to "Neutral", never
+    guessed into a direction."""
+    if bias_label == "uptrend":
+        return "Bullish"
+    if bias_label == "downtrend":
+        return "Bearish"
+    return "Neutral"
+
+
 def _update_alignment_history(prev_snapshot: dict, history_key: str, alignment: dict) -> list:
     history = prev_snapshot.get(history_key, [])
     history.append(alignment["confidence_pct"])
@@ -368,6 +385,30 @@ def _build_symbol_snapshot(
         classify_zones(zones_map.get(tf, []), structure.swing_points if structure else [], timeframe=tf)
 
     bias_map = bias_engine.get_bias_map(symbol, TIMEFRAMES, structure_map=structure_map, cache=cache)
+
+    # Fix #7C — StructureSnapshot.bias was never assigned anywhere in the
+    # live pipeline (StructureEngine.get_snapshot() has no BiasEngine
+    # dependency and never sets it), permanently defaulting to "Neutral" --
+    # Fix #7B's audit found this made every Strategy plugin reading .bias
+    # (via StrategyEngine.to_strategy_snapshot(), which copies
+    # structure.bias straight onto StrategySnapshot.bias) unreachable on
+    # real bias. bias_map above is already this exact symbol/tf's
+    # canonical BiasEngine.evaluate_bias() result (computed one line up,
+    # using this same structure_map) -- no new BiasEngine call, no extra
+    # candle fetch, no new formula. Populated here rather than inside
+    # StructureEngine.get_snapshot() itself: BiasEngine already depends on
+    # StructureEngine (via _resolve_structure()), so adding the reverse
+    # edge there would create a cycle. Output.py already orchestrates both
+    # engines sequentially for every other cross-engine wiring in this
+    # function (zones_map -> classify_zones, structure_map -> bias_map
+    # itself), so this is the minimal, architecture-preserving point.
+    # Read only by to_strategy_snapshot() below -- no other consumer in
+    # this file reads structure.bias, so no other V12-core output changes.
+    for tf, structure in structure_map.items():
+        bias_entry = bias_map.get(tf)
+        if bias_entry:
+            structure.bias = _canonical_structure_bias(bias_entry["bias_label"])
+
     prev_bias_map = prev_snapshot.get("bias")
 
     # --- Scalping ---
