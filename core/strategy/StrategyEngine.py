@@ -16,7 +16,59 @@ logger = logging.getLogger(__name__)
 _EXCLUDED_MODULES = {"strategy_models", "StrategyEngine"}
 
 
+def _mid_price(structure: StructureSnapshot) -> float | None:
+    if structure.current_high is None or structure.current_low is None:
+        return None
+    return (structure.current_high + structure.current_low) / 2
+
+
+def _snr_context(structure: StructureSnapshot) -> dict:
+    price = _mid_price(structure)
+    levels = getattr(structure, "snr_levels", []) or []
+    if price is None or not levels:
+        return {
+            "nearest_support": None,
+            "nearest_resistance": None,
+            "snr_context": "neutral",
+            "snr_strength": 0.0,
+        }
+
+    supports = [lvl.level for lvl in levels if str(lvl.type).lower() == "support"]
+    resistances = [lvl.level for lvl in levels if str(lvl.type).lower() == "resistance"]
+    nearest_support = min(supports, key=lambda level: abs(price - level), default=None)
+    nearest_resistance = min(resistances, key=lambda level: abs(price - level), default=None)
+    nearest_level = min(levels, key=lambda lvl: abs(price - lvl.level))
+    distance = abs(price - nearest_level.level)
+
+    candle_range = abs((structure.current_high or price) - (structure.current_low or price))
+    tolerance = max(candle_range * 0.5, abs(price) * 0.0005)
+    snr_type = str(nearest_level.type).lower()
+
+    if distance <= tolerance and snr_type == "support":
+        context = "at_support"
+    elif distance <= tolerance and snr_type == "resistance":
+        context = "at_resistance"
+    elif nearest_support is not None and nearest_resistance is not None:
+        context = "between_snr"
+    elif nearest_support is not None:
+        context = "above_support"
+    elif nearest_resistance is not None:
+        context = "below_resistance"
+    else:
+        context = "neutral"
+
+    strength = 0.0 if tolerance <= 0 else max(0.0, min(1.0, 1.0 - distance / tolerance))
+
+    return {
+        "nearest_support": nearest_support,
+        "nearest_resistance": nearest_resistance,
+        "snr_context": context,
+        "snr_strength": strength,
+    }
+
+
 def to_strategy_snapshot(structure: StructureSnapshot) -> StrategySnapshot:
+    snr = _snr_context(structure)
     return StrategySnapshot(
         symbol=structure.symbol,
         timeframe=structure.timeframe,
@@ -36,6 +88,13 @@ def to_strategy_snapshot(structure: StructureSnapshot) -> StrategySnapshot:
         is_last_bias_candle=getattr(structure, "is_last_bias_candle", False),
         engulfing_sequence=getattr(structure, "engulfing_sequence", None),
         engulfing_strength=getattr(structure, "engulfing_strength", None),
+        # Fix #7J -- straight copy from _snr_context(), no new formula, no
+        # new fetch; only the 4 fields genuinely read by a committed
+        # Strategy (Fix #7B).
+        nearest_support=snr["nearest_support"],
+        nearest_resistance=snr["nearest_resistance"],
+        snr_context=snr["snr_context"],
+        snr_strength=snr["snr_strength"],
         # Fix #6AS — straight copy, no recomputation, no new fetch.
         atr_normalized_momentum=getattr(structure, "atr_normalized_momentum", None),
         # Fix #7H — straight copy, no recomputation, no new fetch.

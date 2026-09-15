@@ -25,6 +25,19 @@ class StrategySnapshot:
     is_last_bias_candle: bool = False
     engulfing_sequence: Optional[List[str]] = None
     engulfing_strength: Optional[str] = None
+    # Fix #7J -- audit of every committed SNR-field read found exactly 4
+    # fields genuinely consumed by a committed Strategy
+    # (BiasContinuationScalpingStrategy/BiasContinuationSwingStrategy, both
+    # committed in Fix #7B): snr_context (compared against
+    # "at_support"/"at_resistance"), nearest_support, nearest_resistance,
+    # and snr_strength (a confidence bonus multiplier). Sourced from the
+    # canonical StructureSnapshot.snr_levels (Fix #2's SMC engine) via
+    # StrategyEngine.to_strategy_snapshot()'s _snr_context() helper -- no
+    # new formula, no new fetch.
+    nearest_support: Optional[float] = None
+    nearest_resistance: Optional[float] = None
+    snr_context: str = "neutral"
+    snr_strength: float = 0.0
     # Fix #6AS — canonical, instrument-scale-independent momentum, copied
     # straight from StructureSnapshot.atr_normalized_momentum (Fix #6V).
     # Additive only; the legacy `momentum` field above (clamped [0,10],
