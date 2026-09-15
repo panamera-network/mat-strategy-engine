@@ -281,6 +281,24 @@ class StructureSnapshot:
     # candle window used everywhere else in get_snapshot() -- no new fetch.
     # Empty list when there aren't enough candles yet, never guessed.
     recent_candles: List[CandleDirection] = field(default_factory=list)
+    # Fix #7M — the canonical active zone's own evidence (type/top/bottom/
+    # freshness/structural-evidence/timestamp/index), needed by a
+    # zone-driven strategy (e.g. Fresh Zone Reaction) to react to the exact
+    # zone already selected by demand_engine.get_active_zone() -- the SAME
+    # nearest-zone selection rule select_active_zone() already uses for
+    # context_zone/context_level (Fix #4B/#5E3B), just exposing the zone
+    # object itself instead of collapsing it to (type, level). freshness/
+    # structural_evidence come straight from the existing canonical
+    # derive_freshness_state()/derive_structural_evidence() (Fix #5H2) --
+    # no new touch/mitigation logic, no new formula. None when there is no
+    # active zone for this symbol/timeframe.
+    active_zone_type: str | None = None
+    active_zone_top: float | None = None
+    active_zone_bottom: float | None = None
+    active_zone_freshness: str | None = None
+    active_zone_structural_evidence: str | None = None
+    active_zone_timestamp: str | None = None
+    active_zone_index: int | None = None
 
     @property
     def body_dominance(self) -> float:

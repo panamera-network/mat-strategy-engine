@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from core.CandleEngine import CandleEngine
-from core.demand_engine import DemandEngine, link_zone_to_leg_origin
+from core.demand_engine import DemandEngine, derive_freshness_state, derive_structural_evidence, link_zone_to_leg_origin
 from core.FVGEngine import detect_fvg
 from core.MomentumEngine import MomentumEngine
 from core.OrderBlockEngine import detect_order_blocks
@@ -103,6 +103,37 @@ class StructureEngine:
             timeframe=tf,
         )
 
+        # Fix #7M — the same canonical active-zone selection get_context()
+        # above already uses (demand_engine.get_active_zone(), reusing the
+        # same `zones`/candles -- no second fetch), but keeping the zone
+        # object itself so its own freshness/structural evidence can be
+        # exposed. derive_freshness_state()/derive_structural_evidence()
+        # (Fix #5H2) are the same existing canonical reasoning Output.py's
+        # _build_supply_demand_zones() already applies -- no new touch/
+        # mitigation logic, no new formula. None when there is no active
+        # zone for this symbol/timeframe, and also None (degrades
+        # gracefully, same philosophy as no demand_engine at all -> the
+        # context_zone/context_level "neutral" degrade above) for any
+        # injected demand_engine that predates this method -- e.g.
+        # tests/test_structure_engine_context.py's FakeDemandEngine, which
+        # only implements get_context() and must keep working unchanged.
+        active_zone = None
+        if self.demand_engine is not None:
+            get_active_zone_method = getattr(self.demand_engine, "get_active_zone", None)
+            if get_active_zone_method is not None:
+                active_zone = get_active_zone_method(symbol, tf, cache=cache, zones=zones)
+        active_zone_freshness = derive_freshness_state(active_zone) if active_zone else None
+        active_zone_structural_evidence = (
+            derive_structural_evidence(
+                active_zone,
+                origin_zone.type if origin_zone else None,
+                origin_zone.timestamp if origin_zone else None,
+                origin_zone.top if origin_zone else None,
+                origin_zone.bottom if origin_zone else None,
+            )
+            if active_zone else None
+        )
+
         snapshot = StructureSnapshot(
             symbol=symbol,
             timeframe=tf,
@@ -140,6 +171,19 @@ class StructureEngine:
             # already guarantees this is None exactly when there's no
             # confirmed event, same as broken_level/leg_origin_* above.
             pre_break_trend=structure_event.get("pre_break_trend"),
+            # Fix #7M — canonical active-zone evidence, computed above.
+            active_zone_type=active_zone.type if active_zone else None,
+            active_zone_top=active_zone.top if active_zone else None,
+            active_zone_bottom=active_zone.bottom if active_zone else None,
+            active_zone_freshness=active_zone_freshness,
+            active_zone_structural_evidence=active_zone_structural_evidence,
+            active_zone_timestamp=active_zone.timestamp if active_zone else None,
+            # getattr, not direct access: candle_index is ambient-WIP-only
+            # on SupplyDemandZone (committed HEAD deliberately left it out,
+            # per Fix #5B -- "still WIP-only, not needed for
+            # reversal/continuation/unknown"); this degrades to None on a
+            # committed-only SupplyDemandZone rather than crashing.
+            active_zone_index=getattr(active_zone, "candle_index", None) if active_zone else None,
         )
 
         snapshot.structure_type = structure_event["type"]

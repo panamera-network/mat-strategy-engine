@@ -108,6 +108,14 @@ def to_strategy_snapshot(structure: StructureSnapshot) -> StrategySnapshot:
         recent_candles=[asdict(c) for c in (getattr(structure, "recent_candles", None) or [])],
         # Fix #7L — straight copy, no recomputation, no new fetch.
         pre_break_trend=getattr(structure, "pre_break_trend", None),
+        # Fix #7M — straight copy, no recomputation, no new fetch.
+        active_zone_type=getattr(structure, "active_zone_type", None),
+        active_zone_top=getattr(structure, "active_zone_top", None),
+        active_zone_bottom=getattr(structure, "active_zone_bottom", None),
+        active_zone_freshness=getattr(structure, "active_zone_freshness", None),
+        active_zone_structural_evidence=getattr(structure, "active_zone_structural_evidence", None),
+        active_zone_timestamp=getattr(structure, "active_zone_timestamp", None),
+        active_zone_index=getattr(structure, "active_zone_index", None),
     )
 
 

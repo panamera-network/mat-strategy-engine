@@ -239,6 +239,38 @@ def select_active_zone(zones: List[SupplyDemandZone], current_price: float) -> T
     return nearest.type, level
 
 
+def get_active_zone(zones: List[SupplyDemandZone], current_price: float) -> Optional[SupplyDemandZone]:
+    """Fix #7M — the SAME nearest-zone selection rule as select_active_zone()
+    above (identical eligibility -- valid AND NOT mitigated -- and
+    identical nearest-distance formula, no new logic), but returns the
+    zone object itself instead of collapsing it to (type, level). Needed
+    so a Strategy plugin can read the zone's own top/bottom/freshness/
+    timestamp/index evidence directly (via derive_freshness_state()/
+    derive_structural_evidence() below), without recomputing zone
+    detection or selection itself. None when there is no active zone,
+    same as select_active_zone()'s ("neutral", None)."""
+    active = [z for z in zones if z.valid and not z.mitigated]
+    if not active:
+        return None
+
+    def distance(zone: SupplyDemandZone) -> float:
+        if zone.bottom <= current_price <= zone.top:
+            return 0.0
+        if current_price < zone.bottom:
+            return zone.bottom - current_price
+        return current_price - zone.top
+
+    nearest = active[0]
+    nearest_distance = distance(nearest)
+    for zone in active[1:]:
+        d = distance(zone)
+        if d <= nearest_distance:  # <=, not < — later zone wins on a tie, same as select_active_zone()
+            nearest = zone
+            nearest_distance = d
+
+    return nearest
+
+
 def _swing_tolerance_seconds(timeframe: str, window: int = SWING_WINDOW) -> int:
     """Fix #5B — deterministic timestamp tolerance for zone classification:
     `window` candles' worth of time on `timeframe` — the same confirmation
@@ -501,3 +533,16 @@ class DemandEngine:
     def get_label(self, symbol: str, tf: str, cache=None) -> str:
         zone_type, _ = self.get_context(symbol, tf, cache=cache)
         return zone_type
+
+    def get_active_zone(self, symbol: str, tf: str, count: int = 50, cache=None, zones: Optional[List[SupplyDemandZone]] = None) -> Optional[SupplyDemandZone]:
+        """Fix #7M — same resolution as get_context() above (reuses the
+        same already-fetched candles/zones, no second fetch), but returns
+        the full active zone object via get_active_zone() (module-level,
+        the same selection rule as select_active_zone()) instead of
+        collapsing it to (type, level)."""
+        candles = self.candle_engine.get_snapshots(symbol, tf, count=count, cache=cache)
+        if not candles:
+            return None
+        if zones is None:
+            zones = detect_zones(candles)
+        return get_active_zone(zones, candles[-1].close)

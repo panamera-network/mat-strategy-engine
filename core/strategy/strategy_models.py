@@ -86,6 +86,25 @@ class StrategySnapshot:
     # recomputing structure evidence itself. No existing plugin reads this
     # yet.
     pre_break_trend: Optional[str] = None
+    # Fix #7M — canonical active-zone evidence, copied straight from
+    # StructureSnapshot.active_zone_* (Fix #4B/#5E3B's existing
+    # select_active_zone() nearest-zone rule, exposed via the sibling
+    # get_active_zone() that returns the zone object itself instead of
+    # collapsing it to (type, level)). freshness/structural_evidence come
+    # straight from the existing canonical derive_freshness_state()/
+    # derive_structural_evidence() (Fix #5H2) -- no new touch/mitigation
+    # logic, no new formula. Additive only, no recomputation, no new
+    # fetch -- needed so a zone-driven Strategy (e.g. Fresh Zone Reaction)
+    # can react to the zone's own top/bottom/freshness/timestamp/index
+    # without recomputing zone detection/selection itself. None when
+    # there's no active zone. No existing plugin reads these yet.
+    active_zone_type: Optional[str] = None
+    active_zone_top: Optional[float] = None
+    active_zone_bottom: Optional[float] = None
+    active_zone_freshness: Optional[str] = None
+    active_zone_structural_evidence: Optional[str] = None
+    active_zone_timestamp: Optional[str] = None
+    active_zone_index: Optional[int] = None
 
 def price_from_snapshot(snapshot: StrategySnapshot) -> Optional[float]:
     """A representative chart price for a signal — for placing a marker/zone
