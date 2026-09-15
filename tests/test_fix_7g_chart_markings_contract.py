@@ -311,14 +311,27 @@ def test_all_seven_strategy_files_do_not_import_chart_markings_yet():
 def test_strategy_engine_discovery_unchanged_by_new_module():
     """The new chart_markings.py file defines no Strategy subclass, so
     StrategyEngine._discover_strategies() (which auto-loads every .py file
-    in this package) must still find exactly the same 7 strategies."""
+    in this package) must never treat it as a strategy, and must still
+    find at least the original 7 pre-Fix-#7G strategies.
+
+    Originally asserted the discovered set equals exactly those 7 --
+    Fix #7H later added a genuinely new 8th strategy
+    (StructureReversalStrategy), which made that exact-set snapshot
+    stale (a real, intended addition, not a regression -- see
+    tests/test_fix_7h_structure_reversal_strategy.py::test_strategy_engine_discovers_eight_strategies_now
+    for that fix's own count assertion). Rewritten to check the actual
+    invariant this test exists for -- chart_markings.py itself contributes
+    no strategy -- rather than a total count that any future new strategy
+    would otherwise make stale again."""
     from core.strategy.StrategyEngine import StrategyEngine
     engine = StrategyEngine()
-    assert set(engine.enabled.keys()) == {
+    assert "chart_markings" not in engine.enabled
+    original_seven = {
         "BiasContinuationScalpingStrategy", "BiasContinuationSwingStrategy",
         "DoubleEngulfingStrategy", "ZoneContinuationStrategy",
         "ScalpingBiasCascade", "GroupedLastCandleBiasStrategy", "LastCandleBiasStrategy",
     }
+    assert original_seven <= set(engine.enabled.keys())
 
 
 if __name__ == "__main__":

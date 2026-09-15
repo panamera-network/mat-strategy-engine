@@ -37,6 +37,17 @@ class StrategySnapshot:
     # through to this default (None) -- no fallback from legacy `momentum`
     # is invented for a caller that doesn't supply it.
     atr_normalized_momentum: Optional[float] = None
+    # Fix #7H — canonical structural-event evidence, copied straight from
+    # StructureSnapshot.event_timestamp/event_index/event_broken_level
+    # (Fix #2/#6C's guarantee: all three are None exactly when there's no
+    # confirmed BOS/CHoCH, and all populated together when there is).
+    # Additive only, no recomputation, no new fetch -- needed so a Strategy
+    # plugin can build a chart_markings "structure" marking (Fix #7F/#7G)
+    # without recomputing structural evidence independently. No existing
+    # plugin reads these yet.
+    event_timestamp: Optional[str] = None
+    event_index: Optional[int] = None
+    event_broken_level: Optional[float] = None
 
 def price_from_snapshot(snapshot: StrategySnapshot) -> Optional[float]:
     """A representative chart price for a signal — for placing a marker/zone

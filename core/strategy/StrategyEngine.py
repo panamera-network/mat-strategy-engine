@@ -38,6 +38,10 @@ def to_strategy_snapshot(structure: StructureSnapshot) -> StrategySnapshot:
         engulfing_strength=getattr(structure, "engulfing_strength", None),
         # Fix #6AS — straight copy, no recomputation, no new fetch.
         atr_normalized_momentum=getattr(structure, "atr_normalized_momentum", None),
+        # Fix #7H — straight copy, no recomputation, no new fetch.
+        event_timestamp=getattr(structure, "event_timestamp", None),
+        event_index=getattr(structure, "event_index", None),
+        event_broken_level=getattr(structure, "event_broken_level", None),
     )
 
 
