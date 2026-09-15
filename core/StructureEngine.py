@@ -134,6 +134,28 @@ class StructureEngine:
             if active_zone else None
         )
 
+        # Fix #7N — a SEPARATE selector from active_zone above:
+        # get_nearest_mitigated_zone() is a sibling to get_active_zone(),
+        # neither of which is modified here. Same defensive getattr
+        # pattern as active_zone (degrades to None for any demand_engine
+        # stub that predates this method), same already-fetched
+        # `zones`/candles (no new fetch, no new mitigation calculation).
+        mitigated_zone = None
+        if self.demand_engine is not None:
+            get_mitigated_zone_method = getattr(self.demand_engine, "get_nearest_mitigated_zone", None)
+            if get_mitigated_zone_method is not None:
+                mitigated_zone = get_mitigated_zone_method(symbol, tf, cache=cache, zones=zones)
+        mitigated_zone_structural_evidence = (
+            derive_structural_evidence(
+                mitigated_zone,
+                origin_zone.type if origin_zone else None,
+                origin_zone.timestamp if origin_zone else None,
+                origin_zone.top if origin_zone else None,
+                origin_zone.bottom if origin_zone else None,
+            )
+            if mitigated_zone else None
+        )
+
         snapshot = StructureSnapshot(
             symbol=symbol,
             timeframe=tf,
@@ -184,6 +206,20 @@ class StructureEngine:
             # reversal/continuation/unknown"); this degrades to None on a
             # committed-only SupplyDemandZone rather than crashing.
             active_zone_index=getattr(active_zone, "candle_index", None) if active_zone else None,
+            # Fix #7N — straight copy from the canonical zone's own
+            # touch_count (Fix #5E3, already committed), no new counting.
+            active_zone_touch_count=active_zone.touch_count if active_zone else None,
+            # Fix #7N — SEPARATE mitigated-zone evidence bundle, computed
+            # above via the sibling get_nearest_mitigated_zone() selector.
+            mitigated_zone_type=mitigated_zone.type if mitigated_zone else None,
+            mitigated_zone_top=mitigated_zone.top if mitigated_zone else None,
+            mitigated_zone_bottom=mitigated_zone.bottom if mitigated_zone else None,
+            mitigated_zone_structural_evidence=mitigated_zone_structural_evidence,
+            mitigated_zone_timestamp=mitigated_zone.timestamp if mitigated_zone else None,
+            # getattr, not direct access: candle_index is ambient-WIP-only
+            # on SupplyDemandZone, same caveat as active_zone_index above.
+            mitigated_zone_index=getattr(mitigated_zone, "candle_index", None) if mitigated_zone else None,
+            mitigated_zone_touch_count=mitigated_zone.touch_count if mitigated_zone else None,
         )
 
         snapshot.structure_type = structure_event["type"]

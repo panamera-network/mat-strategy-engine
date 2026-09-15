@@ -116,6 +116,16 @@ def to_strategy_snapshot(structure: StructureSnapshot) -> StrategySnapshot:
         active_zone_structural_evidence=getattr(structure, "active_zone_structural_evidence", None),
         active_zone_timestamp=getattr(structure, "active_zone_timestamp", None),
         active_zone_index=getattr(structure, "active_zone_index", None),
+        # Fix #7N — straight copy, no recomputation, no new fetch.
+        active_zone_touch_count=getattr(structure, "active_zone_touch_count", None),
+        # Fix #7N — SEPARATE mitigated-zone evidence bundle, straight copy.
+        mitigated_zone_type=getattr(structure, "mitigated_zone_type", None),
+        mitigated_zone_top=getattr(structure, "mitigated_zone_top", None),
+        mitigated_zone_bottom=getattr(structure, "mitigated_zone_bottom", None),
+        mitigated_zone_structural_evidence=getattr(structure, "mitigated_zone_structural_evidence", None),
+        mitigated_zone_timestamp=getattr(structure, "mitigated_zone_timestamp", None),
+        mitigated_zone_index=getattr(structure, "mitigated_zone_index", None),
+        mitigated_zone_touch_count=getattr(structure, "mitigated_zone_touch_count", None),
     )
 
 

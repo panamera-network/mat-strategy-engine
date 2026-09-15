@@ -105,6 +105,31 @@ class StrategySnapshot:
     active_zone_structural_evidence: Optional[str] = None
     active_zone_timestamp: Optional[str] = None
     active_zone_index: Optional[int] = None
+    # Fix #7N — the active zone's own touch_count (Fix #5E3), straight
+    # copy, no new counting logic. Supporting/transparency evidence only
+    # -- NOT an eligibility gate for any strategy (see
+    # MitigationSecondTouchStrategy's own audit note: freshness=="touched"
+    # alone does not distinguish a true 2nd visit from a 3rd/4th+ one).
+    # None when there's no active zone.
+    active_zone_touch_count: Optional[int] = None
+    # Fix #7N — a SEPARATE minimal evidence bundle from active_zone_*
+    # above: the nearest valid-AND-mitigated zone (demand_engine's
+    # get_nearest_mitigated_zone(), a sibling selector to get_active_zone()
+    # -- neither get_active_zone() nor select_active_zone() are touched by
+    # this; active_zone_* keeps meaning exactly what it always has, valid
+    # AND NOT mitigated). Needed because a mitigated zone can never become
+    # "the" active zone through get_active_zone()'s existing eligibility,
+    # so a Strategy plugin that specifically wants mitigation evidence
+    # needs this separate path. structural_evidence reuses the existing
+    # canonical derive_structural_evidence() (Fix #5H2) unchanged, just
+    # given this zone instead. None when there is no valid mitigated zone.
+    mitigated_zone_type: Optional[str] = None
+    mitigated_zone_top: Optional[float] = None
+    mitigated_zone_bottom: Optional[float] = None
+    mitigated_zone_structural_evidence: Optional[str] = None
+    mitigated_zone_timestamp: Optional[str] = None
+    mitigated_zone_index: Optional[int] = None
+    mitigated_zone_touch_count: Optional[int] = None
 
 def price_from_snapshot(snapshot: StrategySnapshot) -> Optional[float]:
     """A representative chart price for a signal — for placing a marker/zone

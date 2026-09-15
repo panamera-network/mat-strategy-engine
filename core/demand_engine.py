@@ -271,6 +271,40 @@ def get_active_zone(zones: List[SupplyDemandZone], current_price: float) -> Opti
     return nearest
 
 
+def get_nearest_mitigated_zone(zones: List[SupplyDemandZone], current_price: float) -> Optional[SupplyDemandZone]:
+    """Fix #7N — a SEPARATE sibling selector from get_active_zone() above.
+    get_active_zone()/select_active_zone() are untouched by this function
+    -- neither their eligibility (valid AND NOT mitigated) nor their
+    formula changed. This is the deliberately OPPOSITE mitigated filter
+    (valid AND mitigated) -- a zone that has already been closed back
+    into once (a real, canonical event) but has not yet failed outright
+    (invalidated). Same identical nearest-distance formula as
+    get_active_zone()/select_active_zone() (no new formula), same
+    already-computed zone list (no new fetch, no new mitigation
+    calculation -- mitigated/valid are pre-existing fields from unchanged
+    detect_zones()). None when there is no valid mitigated zone."""
+    candidates = [z for z in zones if z.valid and z.mitigated]
+    if not candidates:
+        return None
+
+    def distance(zone: SupplyDemandZone) -> float:
+        if zone.bottom <= current_price <= zone.top:
+            return 0.0
+        if current_price < zone.bottom:
+            return zone.bottom - current_price
+        return current_price - zone.top
+
+    nearest = candidates[0]
+    nearest_distance = distance(nearest)
+    for zone in candidates[1:]:
+        d = distance(zone)
+        if d <= nearest_distance:  # <=, not < — same tie rule as get_active_zone()/select_active_zone()
+            nearest = zone
+            nearest_distance = d
+
+    return nearest
+
+
 def _swing_tolerance_seconds(timeframe: str, window: int = SWING_WINDOW) -> int:
     """Fix #5B — deterministic timestamp tolerance for zone classification:
     `window` candles' worth of time on `timeframe` — the same confirmation
@@ -546,3 +580,16 @@ class DemandEngine:
         if zones is None:
             zones = detect_zones(candles)
         return get_active_zone(zones, candles[-1].close)
+
+    def get_nearest_mitigated_zone(self, symbol: str, tf: str, count: int = 50, cache=None, zones: Optional[List[SupplyDemandZone]] = None) -> Optional[SupplyDemandZone]:
+        """Fix #7N — same resolution as get_active_zone() above (reuses
+        the same already-fetched candles/zones, no second fetch), but
+        selects via get_nearest_mitigated_zone() (module-level) instead --
+        the SEPARATE valid-AND-mitigated selector, not get_active_zone()'s
+        valid-AND-NOT-mitigated one."""
+        candles = self.candle_engine.get_snapshots(symbol, tf, count=count, cache=cache)
+        if not candles:
+            return None
+        if zones is None:
+            zones = detect_zones(candles)
+        return get_nearest_mitigated_zone(zones, candles[-1].close)

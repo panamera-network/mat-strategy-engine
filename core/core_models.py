@@ -299,6 +299,34 @@ class StructureSnapshot:
     active_zone_structural_evidence: str | None = None
     active_zone_timestamp: str | None = None
     active_zone_index: int | None = None
+    # Fix #7N — the active zone's own touch_count (Fix #5E3: distinct
+    # wick-overlap visit episodes, straight copy, no new counting logic).
+    # Exposed as supporting/transparency evidence only -- NOT an
+    # eligibility gate for any strategy (see MitigationSecondTouchStrategy's
+    # own audit note: freshness=="touched" alone does not distinguish a
+    # true 2nd visit from a 3rd/4th+ one; touch_count lets a consumer see
+    # the real count rather than the strategy silently overclaiming
+    # precision the canonical evidence doesn't support). None when there
+    # is no active zone.
+    active_zone_touch_count: int | None = None
+    # Fix #7N — a SEPARATE minimal evidence bundle from active_zone_*
+    # above: the nearest valid-AND-mitigated zone (demand_engine's
+    # get_nearest_mitigated_zone(), a sibling selector to get_active_zone()
+    # -- neither get_active_zone() nor select_active_zone() are touched by
+    # this; active_zone_* keeps meaning exactly what it always has, valid
+    # AND NOT mitigated). Needed because a mitigated zone can never become
+    # "the" active zone through get_active_zone()'s existing eligibility,
+    # so a Strategy plugin that specifically wants mitigation evidence
+    # needs this separate path. structural_evidence reuses the existing
+    # canonical derive_structural_evidence() (Fix #5H2) unchanged, just
+    # given this zone instead. None when there is no valid mitigated zone.
+    mitigated_zone_type: str | None = None
+    mitigated_zone_top: float | None = None
+    mitigated_zone_bottom: float | None = None
+    mitigated_zone_structural_evidence: str | None = None
+    mitigated_zone_timestamp: str | None = None
+    mitigated_zone_index: int | None = None
+    mitigated_zone_touch_count: int | None = None
 
     @property
     def body_dominance(self) -> float:
