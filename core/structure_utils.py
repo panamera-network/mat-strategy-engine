@@ -139,6 +139,132 @@ def detect_structure_event(candles: List[CandleSnapshot], swing_highs: List[int]
     return no_event
 
 
+def detect_breakout_retest(candles: List[CandleSnapshot], structure_event: Dict) -> Dict:
+    """Fix #7P — genuine breakout-then-later-retest evidence, v1 BOS-only.
+
+    Audit finding this function exists to fix: detect_structure_event()
+    above evaluates ONLY candles[-1] against the current window's swing
+    levels, so event_index/event_timestamp ALWAYS point at "now" (the most
+    recent candle) whenever structure_valid is True — they never preserve
+    WHEN a break originally happened relative to the present. A single
+    snapshot's structure_event therefore cannot, by itself, prove "price
+    broke this level several candles ago and is only now retesting it" —
+    it can only prove "this exact candle satisfies the break condition".
+    This function closes that gap by scanning the SAME already-fetched
+    window for the break's true origin candle and any later retest,
+    without re-deriving BOS-vs-CHoCH classification, trend, or swing
+    points (all of which stay exclusively detect_structure_event()'s/
+    detect_trend()'s/find_swings()'s job) — it only reuses:
+      - structure_event's own already-decided valid/type/direction/
+        broken_level (never recomputed here),
+      - the IDENTICAL close-crosses-the-level comparison
+        detect_structure_event() already uses for the current candle,
+        scanned BACKWARD from the current candle to find where the
+        CURRENT unbroken run of closes-beyond-the-level began — i.e. the
+        origin of the leg actually being retested, not simply the
+        earliest historical close-cross of the same numerical level (Fix
+        #7P's own follow-up audit: an EARLIER, now-stale crossing of the
+        same level that was later invalidated by price closing back
+        through it must never be picked as the origin, even though it is
+        numerically the first occurrence in the window),
+      - the IDENTICAL wick-overlap tolerance convention already
+        established for SNR level testing (max(candle_range * 0.25,
+        abs(level) * 0.0003)), applied to the broken level instead of an
+        SNR level -- inline here, no call to any SNR-specific function or
+        classification (no SNRLevel object, no "tested"/"untested"
+        status, no touch count) -- a purely geometric touch tolerance,
+        nothing S&R-specific.
+
+    v1 scope — BOS only: CHoCH represents a trend FLIP (the broken level
+    is the origin of a brand new leg, not a continuation level being
+    retested) — a materially different question this function does not
+    attempt to answer (Fix #7P's own audit conclusion). structure_event
+    that is not a valid BOS returns no evidence at all, deliberately, not
+    a best-effort guess.
+
+    "Holds" semantics: a touch only counts as a genuine retest if that
+    candle's CLOSE stays on the broken side of the level (Bullish: close
+    >= level; Bearish: close <= level) — a touch that closes through to
+    the wrong side is a failed retest, not a valid one, and is skipped in
+    favor of scanning for a later, genuine hold (if any).
+
+    Returns a dict with breakout_origin_index/timestamp (the start of the
+    CURRENT unbroken breakout leg, not the earliest historical crossing of
+    the same level) and retest_index/timestamp/retest_confirmed — all
+    None/False when there is no valid BOS, the origin IS the current
+    candle (no time has passed for a retest yet), or no later candle both
+    touches and holds."""
+    no_evidence = {
+        "breakout_origin_index": None, "breakout_origin_timestamp": None,
+        "retest_index": None, "retest_timestamp": None, "retest_confirmed": False,
+    }
+
+    if not structure_event.get("valid") or structure_event.get("type") != "BOS":
+        return no_evidence
+
+    direction = structure_event.get("direction")
+    level = structure_event.get("broken_level")
+    if level is None or direction not in ("Bullish", "Bearish"):
+        return no_evidence
+
+    def beyond(c) -> bool:
+        return c.close > level if direction == "Bullish" else c.close < level
+
+    current_index = len(candles) - 1
+    if not beyond(candles[current_index]):
+        # structure_event's own valid=True/type="BOS" guarantees this is
+        # true in practice (detect_structure_event() only classifies a
+        # candle as a valid BOS when its own close satisfies this exact
+        # condition) -- defensive only, never expected to fire live.
+        return no_evidence
+
+    # Fix #7P (origin-identity audit) — scan BACKWARD from the current
+    # candle to find the START of the unbroken run of closes-beyond-the-
+    # level ending at current_index. The first (earliest-in-time) candle
+    # of THAT run is the origin of the leg actually being retested. A
+    # candle further back whose close was on the wrong side of the level
+    # marks the end of any earlier, unrelated leg — scanning stops there
+    # rather than continuing past it, so a stale historical crossing of
+    # the same numerical level (already invalidated by that reversal)
+    # can never be mistaken for the current origin.
+    origin_index = 0
+    for i in range(current_index - 1, -1, -1):
+        if not beyond(candles[i]):
+            origin_index = i + 1
+            break
+
+    if origin_index >= current_index:
+        return no_evidence
+
+    origin_candle = candles[origin_index]
+
+    candle_range = abs(origin_candle.high - origin_candle.low)
+    tolerance = max(candle_range * 0.25, abs(level) * 0.0003)
+
+    retest_index = None
+    for i in range(origin_index + 1, current_index):
+        c = candles[i]
+        touches = (c.low - tolerance) <= level <= (c.high + tolerance)
+        if not touches:
+            continue
+        held = (c.close >= level) if direction == "Bullish" else (c.close <= level)
+        if held:
+            retest_index = i
+            break
+
+    if retest_index is None:
+        return no_evidence
+
+    retest_candle = candles[retest_index]
+    return {
+        "breakout_origin_index": origin_index,
+        "breakout_origin_timestamp": str(origin_candle.timestamp),
+        "retest_index": retest_index,
+        "retest_timestamp": str(retest_candle.timestamp),
+        "retest_confirmed": True,
+    }
+
+
 def label_swing_points(
     candles: List[CandleSnapshot],
     swing_highs: List[int],

@@ -126,6 +126,12 @@ def to_strategy_snapshot(structure: StructureSnapshot) -> StrategySnapshot:
         mitigated_zone_timestamp=getattr(structure, "mitigated_zone_timestamp", None),
         mitigated_zone_index=getattr(structure, "mitigated_zone_index", None),
         mitigated_zone_touch_count=getattr(structure, "mitigated_zone_touch_count", None),
+        # Fix #7P — straight copy, no recomputation, no new fetch.
+        breakout_origin_index=getattr(structure, "breakout_origin_index", None),
+        breakout_origin_timestamp=getattr(structure, "breakout_origin_timestamp", None),
+        retest_index=getattr(structure, "retest_index", None),
+        retest_timestamp=getattr(structure, "retest_timestamp", None),
+        retest_confirmed=getattr(structure, "retest_confirmed", False),
     )
 
 

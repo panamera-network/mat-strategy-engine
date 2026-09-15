@@ -327,6 +327,23 @@ class StructureSnapshot:
     mitigated_zone_timestamp: str | None = None
     mitigated_zone_index: int | None = None
     mitigated_zone_touch_count: int | None = None
+    # Fix #7P — genuine breakout-then-later-retest evidence (v1 BOS-only;
+    # see structure_utils.detect_breakout_retest()'s own docstring for the
+    # full audit rationale). event_index/event_timestamp above ALWAYS
+    # point at the current/most-recent candle whenever structure_valid is
+    # True -- they cannot prove WHEN a break originally happened relative
+    # to now. breakout_origin_index/timestamp is the actual first-crossing
+    # candle of the CURRENT breakout leg (not the earliest historical
+    # crossing of the same numerical level); retest_index/timestamp is the
+    # first later candle that both touches event_broken_level and closes
+    # back on the held side. All None/False together when there is no
+    # valid BOS, the origin IS the current candle (no time has passed for
+    # a retest yet), or no later candle both touches and holds.
+    breakout_origin_index: int | None = None
+    breakout_origin_timestamp: str | None = None
+    retest_index: int | None = None
+    retest_timestamp: str | None = None
+    retest_confirmed: bool = False
 
     @property
     def body_dominance(self) -> float:

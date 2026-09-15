@@ -130,6 +130,20 @@ class StrategySnapshot:
     mitigated_zone_timestamp: Optional[str] = None
     mitigated_zone_index: Optional[int] = None
     mitigated_zone_touch_count: Optional[int] = None
+    # Fix #7P — genuine breakout-then-later-retest evidence, copied
+    # straight from StructureSnapshot.breakout_origin_*/retest_* (v1
+    # BOS-only; see structure_utils.detect_breakout_retest()'s own
+    # docstring for the full audit rationale). event_timestamp/event_index
+    # above always point at the current/most-recent candle whenever
+    # structure_valid is True -- they cannot prove WHEN a break originally
+    # happened; breakout_origin_index/timestamp is the actual first-
+    # crossing candle of the CURRENT breakout leg. Additive only, no
+    # recomputation, no new fetch.
+    breakout_origin_index: Optional[int] = None
+    breakout_origin_timestamp: Optional[str] = None
+    retest_index: Optional[int] = None
+    retest_timestamp: Optional[str] = None
+    retest_confirmed: bool = False
 
 def price_from_snapshot(snapshot: StrategySnapshot) -> Optional[float]:
     """A representative chart price for a signal — for placing a marker/zone

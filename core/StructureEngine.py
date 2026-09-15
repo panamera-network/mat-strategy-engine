@@ -11,6 +11,7 @@ from core.core_models import PriceSnapshot, StructureSnapshot
 from core.structure_utils import (
     SWING_LOOKBACK,
     SWING_WINDOW,
+    detect_breakout_retest,
     detect_structure_event,
     detect_trend,
     derive_snr_levels,
@@ -47,6 +48,12 @@ class StructureEngine:
         lookback = candles[-SWING_LOOKBACK:] if len(candles) > SWING_LOOKBACK else candles
         swing_highs, swing_lows = find_swings(lookback)
         structure_event = detect_structure_event(lookback, swing_highs, swing_lows)
+        # Fix #7P — reuses the SAME already-fetched `lookback` window and
+        # the SAME already-decided structure_event (no duplicate BOS/CHoCH
+        # classification); only scans for the break's true origin candle
+        # and any later retest. See detect_breakout_retest()'s own
+        # docstring for the full audit rationale (v1 BOS-only).
+        breakout_retest = detect_breakout_retest(lookback, structure_event)
         swing_points = label_swing_points(lookback, swing_highs, swing_lows)
         snr_levels = derive_snr_levels(lookback, swing_highs, swing_lows, structure_event)
         order_blocks = detect_order_blocks(lookback, [structure_event], timeframe=tf)
@@ -220,6 +227,15 @@ class StructureEngine:
             # on SupplyDemandZone, same caveat as active_zone_index above.
             mitigated_zone_index=getattr(mitigated_zone, "candle_index", None) if mitigated_zone else None,
             mitigated_zone_touch_count=mitigated_zone.touch_count if mitigated_zone else None,
+            # Fix #7P — genuine breakout-then-later-retest evidence,
+            # computed above via detect_breakout_retest() (no duplicate
+            # BOS/CHoCH calculation, reuses the already-decided
+            # structure_event and the already-fetched lookback window).
+            breakout_origin_index=breakout_retest["breakout_origin_index"],
+            breakout_origin_timestamp=breakout_retest["breakout_origin_timestamp"],
+            retest_index=breakout_retest["retest_index"],
+            retest_timestamp=breakout_retest["retest_timestamp"],
+            retest_confirmed=breakout_retest["retest_confirmed"],
         )
 
         snapshot.structure_type = structure_event["type"]
