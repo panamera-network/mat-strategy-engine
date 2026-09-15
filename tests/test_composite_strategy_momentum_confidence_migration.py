@@ -197,11 +197,16 @@ def test_swing_confidence_within_cap():
 
 
 # ---------------------------------------------------------------------------
-# DoubleEngulfingStrategy -- isolated against HEAD's actual (pre-existing,
-# uncommitted-SNR-bonus-restructuring-free) shape: confidence =
+# DoubleEngulfingStrategy -- originally (Fix #6AV, HEAD at the time, no
+# SNR-bonus restructuring yet) isolated against: confidence =
 # min(strategy_momentum_confidence(atr, direction) + bonus, 1.0), bonus =
-# full_bonus if wick_extension else 0.0. No SNR bonus/note/price-override in
-# this contract -- that belongs to a separate, still-uncommitted feature.
+# full_bonus if wick_extension else 0.0. Fix #7D's audit found the ambient
+# SNR-WIP has since added an SNR/zone-confluence bonus and rescaled the
+# wick-extension bonus to a 0.2x weight (see
+# test_engulfing_wick_extension_bonus_reflects_current_0_2x_weighting for
+# the full reconciliation) -- the tests below that don't exercise Strong
+# wick or an at_support/at_resistance snr_context still see snr_bonus=0
+# and are unaffected either way.
 # ---------------------------------------------------------------------------
 
 def _engulf_snap(**overrides):
@@ -241,14 +246,36 @@ def test_engulfing_bullish_bearish_symmetry():
     assert bearish["direction"] == "short"
 
 
-def test_engulfing_wick_extension_bonus_unchanged():
+def test_engulfing_wick_extension_bonus_reflects_current_0_2x_weighting():
+    """Fix #6AV's original expectation (HEAD at the time, no SNR-bonus
+    restructuring yet): bonus = full_bonus if Strong else 0.0, i.e. a full
+    1.0x weight -- sequence ("bull","bull") gives full_bonus=1.0, so Strong
+    capped confidence to 1.0 regardless of momentum (0.5+1.0->1.0) and Weak
+    landed at 0.5 (0.5+0.0) -> diff was 0.5.
+
+    Fix #7D's audit found the ambient SNR-WIP deliberately rescaled the
+    wick-extension bonus to a 0.2x weight (bonus = full_bonus * 0.2),
+    alongside a new SNR/zone-confluence bonus of the same 0.2x weight --
+    so a Strong wick pattern no longer saturates confidence to 1.0 on its
+    own regardless of momentum/zone evidence. Classified as an intentional,
+    semantically valid rebalancing (not a bug): it brings this plugin's
+    formula in line with the base+bonus+momentum composition already used
+    by BiasContinuationScalpingStrategy/BiasContinuationSwingStrategy, and
+    the delayed-pattern proportion (full_bonus=0.5 -> half the immediate
+    pattern's bonus) is preserved under the rescale."""
     strat = DoubleEngulfingStrategy()
     strong = strat.react(_engulf_snap(engulfing_strength="Strong", atr_normalized_momentum=1.0), {})
     weak = strat.react(_engulf_snap(engulfing_strength="Weak", atr_normalized_momentum=1.0), {})
-    # sequence ("bull","bull") -> full_bonus=1.0 -> bonus = 1.0 if Strong else 0.0 (HEAD's own formula,
-    # unchanged by this fix); momentum term = strategy_momentum_confidence(1.0, "long") = 0.5 in both,
-    # so strong caps at 1.0 (0.5+1.0->1.0) and weak stays at 0.5 (0.5+0.0) -> diff = 0.5
-    assert round(strong["confidence"] - weak["confidence"], 2) == 0.5
+    # sequence ("bull","bull") -> full_bonus=1.0 -> bonus = full_bonus * 0.2 = 0.2 if Strong else 0.0.
+    # momentum term = strategy_momentum_confidence(1.0, "long") = 0.5 in both. snr_context defaults to
+    # "neutral" (not at_support/at_resistance) for both calls, so snr_bonus=0.0 in both -- cancels out
+    # of the diff either way.
+    # strong = min(0.5 + 0.2 + 0.0, 1.0) = 0.7
+    # weak   = min(0.5 + 0.0 + 0.0, 1.0) = 0.5
+    # diff   = 0.2
+    assert strong["confidence"] == 0.7
+    assert weak["confidence"] == 0.5
+    assert round(strong["confidence"] - weak["confidence"], 2) == 0.2
 
 
 def test_engulfing_confidence_within_cap():
@@ -260,15 +287,17 @@ def test_engulfing_confidence_within_cap():
 
 
 # ---------------------------------------------------------------------------
-# ZoneContinuationStrategy -- isolated against HEAD's actual (pre-existing,
-# uncommitted-SNR-bonus/zone-matching-restructuring-free) shape: confidence
-# is the bare strategy_momentum_confidence(atr, direction) value, no base
-# offset, no SNR bonus, no extra cap (the helper is already bounded).
-# Eligibility requires snapshot.structure_type to literally be "breakout" or
-# "reversal" (HEAD's own pre-existing check -- StructureSnapshot's real
-# structure_type values are "BOS"/"CHOCH"/"None", so this branch of HEAD's
-# code is effectively unreachable live; not this fix's concern to touch,
-# preserved exactly as HEAD has it).
+# ZoneContinuationStrategy -- originally (Fix #6AV, HEAD at the time, no
+# SNR-bonus/zone-matching restructuring yet) isolated against: confidence
+# was the bare strategy_momentum_confidence(atr, direction) value, no base
+# offset, no SNR bonus. Fix #7D's audit found the ambient SNR-WIP has since
+# added a fixed +0.15 base offset plus an snr_strength*0.15 bonus (see
+# test_zone_wrong_direction_atr_momentum_term_is_zero_but_baseline_floor_remains
+# / test_zone_none_atr_momentum_term_is_zero_but_baseline_floor_remains for
+# the full reconciliation), and rewrote eligibility/zone-matching via
+# _matching_context()/_context_label_and_price() -- "breakout"/"reversal"
+# structure_type values (this section's snap() fixtures use "breakout")
+# still map through the new _STRUCTURE_TRIGGERS dict identically to before.
 # ---------------------------------------------------------------------------
 
 def _zone_htf(context_zone="demand"):
@@ -294,19 +323,72 @@ def test_zone_confidence_ignores_legacy_momentum_uses_atr():
     assert tiny_legacy["confidence"] == huge_legacy["confidence"]
 
 
-def test_zone_wrong_direction_atr_contributes_zero():
+def test_zone_wrong_direction_atr_momentum_term_is_zero_but_baseline_floor_remains():
+    """Fix #6AV's original expectation (HEAD at the time, no SNR-bonus/
+    zone-matching restructuring yet): confidence was the bare
+    strategy_momentum_confidence(atr, direction) value with no other
+    additive term at all, so wrong-direction ATR drove the whole
+    confidence to exactly 0.0.
+
+    Fix #7D's audit found the ambient SNR-WIP deliberately added a fixed
+    +0.15 base offset plus an snr_strength-scaled bonus to this plugin's
+    formula (confidence = min(momentum_term + 0.15 + snr_strength*0.15,
+    1.0)) -- the same base+bonus+momentum composition already used by
+    BiasContinuationScalpingStrategy (+0.12)/BiasContinuationSwingStrategy
+    (+0.18). Classified as intentional and semantically valid: a
+    structurally-confirmed zone continuation (real BOS/CHoCH + matched
+    zone) now keeps a baseline confidence even when momentum currently
+    disagrees, with momentum/SNR strength scoring the setup rather than
+    gating it to zero. This proves BOTH halves of that change: the
+    momentum ingredient itself is still exactly 0 on disagreement (the
+    canonical helper is untouched), AND the strategy's total output no
+    longer floors to 0 because of the new baseline/SNR contribution."""
+    from core.strategy.strategy_models import strategy_momentum_confidence
+
     strat = ZoneContinuationStrategy()
     ctx = _zone_context("demand")
     agreeing = strat.react(_zone_snap(atr_normalized_momentum=1.0), ctx)
     opposing = strat.react(_zone_snap(atr_normalized_momentum=-1.0), ctx)
     assert agreeing["confidence"] > opposing["confidence"]
-    assert opposing["confidence"] == 0.0
+
+    # Momentum ingredient itself: still exactly 0 on direction disagreement
+    # (strategy_momentum_confidence() is unchanged -- proven directly, not
+    # inferred from the strategy's total output).
+    assert strategy_momentum_confidence(-1.0, "long") == 0.0
+
+    # Total output: momentum=0.0 + base=0.15 + snr_strength(0.0)*0.15 = 0.15
+    # -- the eligible-setup baseline survives even with wrong-direction
+    # momentum; it is NOT the old 0.0 floor any more.
+    assert opposing["confidence"] == 0.15
+
+    # And the baseline/SNR contribution scales further with real SNR
+    # strength, on top of the still-zero momentum ingredient.
+    opposing_with_snr = strat.react(
+        _zone_snap(atr_normalized_momentum=-1.0, snr_strength=1.0), ctx,
+    )
+    assert strategy_momentum_confidence(-1.0, "long") == 0.0
+    assert opposing_with_snr["confidence"] == 0.30  # 0.0 + 0.15 + 1.0*0.15
 
 
-def test_zone_none_atr_zero():
+def test_zone_none_atr_momentum_term_is_zero_but_baseline_floor_remains():
+    """Same reconciliation as
+    test_zone_wrong_direction_atr_momentum_term_is_zero_but_baseline_floor_remains
+    above, for the None-ATR case specifically. Fix #6AV's original
+    expectation: confidence == 0.0 (bare momentum term, None -> 0.0, no
+    other term existed). Fix #7D's audit: the same new +0.15 base +
+    snr_strength*0.15 bonus applies here too, so the total floors at 0.15
+    (with snr_strength=0.0), not 0.0."""
+    from core.strategy.strategy_models import strategy_momentum_confidence
+
     strat = ZoneContinuationStrategy()
     result = strat.react(_zone_snap(atr_normalized_momentum=None), _zone_context("demand"))
-    assert result["confidence"] == 0.0
+
+    # Momentum ingredient itself: still exactly 0 for a None (ATR14
+    # unavailable) reading.
+    assert strategy_momentum_confidence(None, "long") == 0.0
+
+    # Total output retains the eligible-setup baseline: 0.0 + 0.15 + 0.0 = 0.15
+    assert result["confidence"] == 0.15
 
 
 def test_zone_bullish_bearish_symmetry():
