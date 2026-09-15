@@ -15,6 +15,7 @@ from core.structure_utils import (
     detect_trend,
     derive_snr_levels,
     find_swings,
+    label_recent_candles,
     label_swing_points,
 )
 
@@ -50,6 +51,10 @@ class StructureEngine:
         snr_levels = derive_snr_levels(lookback, swing_highs, swing_lows, structure_event)
         order_blocks = detect_order_blocks(lookback, [structure_event], timeframe=tf)
         fvg = detect_fvg(lookback, timeframe=tf)
+        # Fix #7K -- reuses the same already-fetched `candles` window (no
+        # new fetch); last 3 by default, enough for a 3-candle sequence
+        # strategy.
+        recent_candles = label_recent_candles(candles, count=3)
 
         # Fix #2 — event index/timestamp evidence, derived independently
         # here so this evidence works standalone. None when there's no
@@ -114,6 +119,7 @@ class StructureEngine:
             snr_levels=snr_levels,
             order_blocks=order_blocks,
             fvg=fvg,
+            recent_candles=recent_candles,
             swing_points=swing_points,
             event_broken_level=structure_event.get("broken_level"),
             event_index=event_index,

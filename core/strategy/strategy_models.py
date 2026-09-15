@@ -61,6 +61,16 @@ class StrategySnapshot:
     event_timestamp: Optional[str] = None
     event_index: Optional[int] = None
     event_broken_level: Optional[float] = None
+    # Fix #7K — standalone per-candle direction evidence (close vs open
+    # only, no engulfing/relational comparison) for the most recent
+    # candles, copied straight from StructureSnapshot.recent_candles (each
+    # entry a plain {"direction", "index", "timestamp"} dict, converted
+    # from the canonical CandleDirection dataclass). Additive only, no
+    # recomputation, no new fetch -- needed so a candle-sequence Strategy
+    # (e.g. IPC) can identify an exact multi-candle pattern without
+    # recomputing candle history itself. Empty list when there aren't
+    # enough candles yet, never guessed.
+    recent_candles: Optional[List[Dict]] = None
 
 def price_from_snapshot(snapshot: StrategySnapshot) -> Optional[float]:
     """A representative chart price for a signal — for placing a marker/zone

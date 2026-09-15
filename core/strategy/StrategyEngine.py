@@ -2,6 +2,7 @@ import importlib
 import inspect
 import logging
 import pkgutil
+from dataclasses import asdict
 from pathlib import Path
 from typing import Dict, List
 
@@ -101,6 +102,10 @@ def to_strategy_snapshot(structure: StructureSnapshot) -> StrategySnapshot:
         event_timestamp=getattr(structure, "event_timestamp", None),
         event_index=getattr(structure, "event_index", None),
         event_broken_level=getattr(structure, "event_broken_level", None),
+        # Fix #7K — straight copy from StructureSnapshot.recent_candles
+        # (dataclass -> plain dict per entry, same conversion Output.py
+        # already uses for snr_levels), no recomputation, no new fetch.
+        recent_candles=[asdict(c) for c in (getattr(structure, "recent_candles", None) or [])],
     )
 
 

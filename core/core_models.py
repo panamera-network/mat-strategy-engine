@@ -160,6 +160,21 @@ class SwingPoint:
 
 
 @dataclass
+class CandleDirection:
+    """Fix #7K -- one candle's standalone direction (close vs open only --
+    no engulfing/relational comparison to a neighboring candle, unlike
+    structure_utils.detect_engulfing_sequence()'s transition labels). Added
+    so a Strategy plugin identifying an exact multi-candle sequence (e.g.
+    IPC's Ignite/Pullback/Confirmation) can read each candle's direction,
+    absolute index, and timestamp directly, instead of recomputing candle
+    history itself. index is the candle's absolute position in the window
+    StructureEngine evaluated (same convention as SwingPoint/event_index)."""
+    direction: str  # "bull", "bear", or "neutral"
+    index: int
+    timestamp: str
+
+
+@dataclass
 class SNRLevel:
     type: str            # "Resistance" or "Support"
     level: float
@@ -257,6 +272,15 @@ class StructureSnapshot:
     # established trend either way at break time, per Fix #6B's audit);
     # None only when there's no confirmed event at all.
     pre_break_trend: str | None = None
+    # Fix #7K -- standalone per-candle direction evidence for the most
+    # recent candles (close vs open only, no engulfing/relational
+    # comparison), needed by candle-sequence strategies (e.g. IPC's
+    # Ignite/Pullback/Confirmation) to identify an exact multi-candle
+    # pattern without recomputing candle history themselves. Populated by
+    # structure_utils.label_recent_candles() from the same already-fetched
+    # candle window used everywhere else in get_snapshot() -- no new fetch.
+    # Empty list when there aren't enough candles yet, never guessed.
+    recent_candles: List[CandleDirection] = field(default_factory=list)
 
     @property
     def body_dominance(self) -> float:

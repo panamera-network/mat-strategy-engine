@@ -226,11 +226,25 @@ def test_chart_marking_is_internally_valid():
 # StrategyEngine discovers the new strategy: 7 -> 8.
 # ---------------------------------------------------------------------------
 
-def test_strategy_engine_discovers_eight_strategies_now():
+def test_strategy_engine_discovers_structure_reversal_strategy():
+    """Originally asserted the discovered count equals exactly 8 -- Fix
+    #7K later added a genuinely new 9th strategy (IPCStrategy), which made
+    that exact-count snapshot stale (a real, intended addition, not a
+    regression -- see
+    tests/test_fix_7k_ipc_strategy_v1.py::test_strategy_engine_discovers_nine_strategies_now
+    for that fix's own count assertion). Rewritten to check the actual
+    invariant this test exists for -- StructureReversalStrategy is
+    discovered alongside the original 7 -- rather than a total count that
+    any future new strategy would otherwise make stale again."""
     from core.strategy.StrategyEngine import StrategyEngine
     engine = StrategyEngine()
-    assert len(engine.enabled) == 8
     assert "StructureReversalStrategy" in engine.enabled
+    original_seven = {
+        "BiasContinuationScalpingStrategy", "BiasContinuationSwingStrategy",
+        "DoubleEngulfingStrategy", "ZoneContinuationStrategy",
+        "ScalpingBiasCascade", "GroupedLastCandleBiasStrategy", "LastCandleBiasStrategy",
+    }
+    assert original_seven <= set(engine.enabled.keys())
 
 
 # ---------------------------------------------------------------------------

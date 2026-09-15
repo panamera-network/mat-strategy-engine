@@ -4,7 +4,7 @@ without creating an import cycle (StructureEngine pulls in SuppressionEngine,
 which pulls in BiasEngine)."""
 from typing import Dict, List, Tuple
 
-from core.core_models import CandleSnapshot, SNRLevel, SwingPoint
+from core.core_models import CandleDirection, CandleSnapshot, SNRLevel, SwingPoint
 
 SWING_LOOKBACK = 20
 SWING_WINDOW = 3
@@ -194,3 +194,33 @@ def derive_snr_levels(candles: List[CandleSnapshot], swing_highs: List[int], swi
         flip_target.source = "CHOCH_flip"
 
     return levels
+
+
+def label_recent_candles(candles: List[CandleSnapshot], count: int = 3) -> List[CandleDirection]:
+    """Fix #7K -- standalone bull/bear/neutral direction (close vs open on
+    that candle alone -- no engulfing/relational comparison to a neighbor,
+    unlike detect_engulfing_sequence()'s transition labels) for the last
+    `count` candles, each with its absolute index (position in `candles`,
+    same convention as SwingPoint/event_index) and timestamp.
+
+    Added so a candle-sequence Strategy (e.g. IPC's Ignite/Pullback/
+    Confirmation) can identify an exact 3-candle pattern from evidence
+    already computed here, instead of recomputing candle direction/
+    timestamp/index itself. Empty list (never a guess/backfill) when there
+    aren't at least `count` candles yet.
+    """
+    if len(candles) < count:
+        return []
+
+    window = candles[-count:]
+    base_index = len(candles) - count
+    result: List[CandleDirection] = []
+    for offset, candle in enumerate(window):
+        if candle.close > candle.open:
+            direction = "bull"
+        elif candle.close < candle.open:
+            direction = "bear"
+        else:
+            direction = "neutral"
+        result.append(CandleDirection(direction=direction, index=base_index + offset, timestamp=str(candle.timestamp)))
+    return result
