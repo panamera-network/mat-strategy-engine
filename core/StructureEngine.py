@@ -278,6 +278,25 @@ class StructureEngine:
         # call.
         snapshot.atr_normalized_momentum = momentum_snapshot.atr_normalized_momentum
 
+        # Fix #7U -- genuine expansion -> pullback -> recovery momentum
+        # sequence evidence, reusing the SAME already-fetched `candles`
+        # window and the SAME momentum_engine already used for the current
+        # atr_normalized_momentum reading above -- no new fetch, no second
+        # momentum formula. See MomentumEngine.detect_pullback_recovery()'s
+        # own docstring for the full audit rationale.
+        pullback_recovery = momentum_engine.detect_pullback_recovery(candles, symbol, tf)
+        snapshot.momentum_sequence_confirmed = pullback_recovery["confirmed"]
+        snapshot.momentum_sequence_direction = pullback_recovery["direction"]
+        snapshot.momentum_expansion_index = pullback_recovery["expansion_index"]
+        snapshot.momentum_expansion_timestamp = pullback_recovery["expansion_timestamp"]
+        snapshot.momentum_expansion_value = pullback_recovery["expansion_momentum"]
+        snapshot.momentum_pullback_index = pullback_recovery["pullback_index"]
+        snapshot.momentum_pullback_timestamp = pullback_recovery["pullback_timestamp"]
+        snapshot.momentum_pullback_value = pullback_recovery["pullback_momentum"]
+        snapshot.momentum_recovery_index = pullback_recovery["recovery_index"]
+        snapshot.momentum_recovery_timestamp = pullback_recovery["recovery_timestamp"]
+        snapshot.momentum_recovery_value = pullback_recovery["recovery_momentum"]
+
         strength_diag = strength_engine.compute_strength(candles)
         snapshot.strength = strength_diag.strength
         snapshot.body_ratio = strength_diag.avg_body_ratio

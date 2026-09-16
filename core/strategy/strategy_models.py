@@ -176,6 +176,26 @@ class StrategySnapshot:
     # several candles later than where this BOS leg actually began.
     bos_origin_index: Optional[int] = None
     bos_origin_timestamp: Optional[str] = None
+    # Fix #7U -- genuine expansion -> pullback -> recovery momentum
+    # sequence evidence, straight copy from StructureSnapshot.momentum_
+    # sequence_confirmed/momentum_sequence_direction/momentum_expansion_*/
+    # momentum_pullback_*/momentum_recovery_* (itself computed by
+    # MomentumEngine.detect_pullback_recovery() -- see StructureSnapshot's
+    # own docstring for the full audit/wiring path). atr_normalized_
+    # momentum above always describes the CURRENT reading only; the
+    # expansion/pullback fields describe two different, earlier candles.
+    # No new formula, no recomputation, no new fetch.
+    momentum_sequence_confirmed: bool = False
+    momentum_sequence_direction: Optional[str] = None
+    momentum_expansion_index: Optional[int] = None
+    momentum_expansion_timestamp: Optional[str] = None
+    momentum_expansion_value: Optional[float] = None
+    momentum_pullback_index: Optional[int] = None
+    momentum_pullback_timestamp: Optional[str] = None
+    momentum_pullback_value: Optional[float] = None
+    momentum_recovery_index: Optional[int] = None
+    momentum_recovery_timestamp: Optional[str] = None
+    momentum_recovery_value: Optional[float] = None
 
 def price_from_snapshot(snapshot: StrategySnapshot) -> Optional[float]:
     """A representative chart price for a signal — for placing a marker/zone

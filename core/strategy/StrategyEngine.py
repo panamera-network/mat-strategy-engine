@@ -144,6 +144,18 @@ def to_strategy_snapshot(structure: StructureSnapshot) -> StrategySnapshot:
         # recomputation, no new fetch.
         bos_origin_index=getattr(structure, "bos_origin_index", None),
         bos_origin_timestamp=getattr(structure, "bos_origin_timestamp", None),
+        # Fix #7U -- straight copy, no recomputation, no new fetch.
+        momentum_sequence_confirmed=getattr(structure, "momentum_sequence_confirmed", False),
+        momentum_sequence_direction=getattr(structure, "momentum_sequence_direction", None),
+        momentum_expansion_index=getattr(structure, "momentum_expansion_index", None),
+        momentum_expansion_timestamp=getattr(structure, "momentum_expansion_timestamp", None),
+        momentum_expansion_value=getattr(structure, "momentum_expansion_value", None),
+        momentum_pullback_index=getattr(structure, "momentum_pullback_index", None),
+        momentum_pullback_timestamp=getattr(structure, "momentum_pullback_timestamp", None),
+        momentum_pullback_value=getattr(structure, "momentum_pullback_value", None),
+        momentum_recovery_index=getattr(structure, "momentum_recovery_index", None),
+        momentum_recovery_timestamp=getattr(structure, "momentum_recovery_timestamp", None),
+        momentum_recovery_value=getattr(structure, "momentum_recovery_value", None),
     )
 
 

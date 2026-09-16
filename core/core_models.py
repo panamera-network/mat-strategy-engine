@@ -403,6 +403,30 @@ class StructureSnapshot:
     # choch_index/choch_timestamp above).
     bos_origin_index: int | None = None
     bos_origin_timestamp: str | None = None
+    # Fix #7U -- genuine expansion -> pullback -> recovery momentum
+    # sequence evidence, computed by MomentumEngine.detect_pullback_
+    # recovery() (replays the canonical slope2/ATR14 formula -- the same
+    # one atr_normalized_momentum above already uses -- on shorter
+    # prefixes of this same already-fetched candle window; no duplicate
+    # formula, no new fetch, no persistent state). atr_normalized_momentum
+    # above ALWAYS describes the CURRENT/most-recent reading only;
+    # momentum_expansion_*/momentum_pullback_* describe two DIFFERENT,
+    # earlier candles -- the true origins of a same-direction expansion
+    # and a later pullback found before the current (recovery) reading.
+    # All None/False together when the current reading is missing, not
+    # genuinely recovered (>= RECOVERY_STRONG_THRESHOLD), or no valid
+    # earlier pullback+expansion pair was found within the window.
+    momentum_sequence_confirmed: bool = False
+    momentum_sequence_direction: str | None = None
+    momentum_expansion_index: int | None = None
+    momentum_expansion_timestamp: str | None = None
+    momentum_expansion_value: float | None = None
+    momentum_pullback_index: int | None = None
+    momentum_pullback_timestamp: str | None = None
+    momentum_pullback_value: float | None = None
+    momentum_recovery_index: int | None = None
+    momentum_recovery_timestamp: str | None = None
+    momentum_recovery_value: float | None = None
 
     @property
     def body_dominance(self) -> float:
