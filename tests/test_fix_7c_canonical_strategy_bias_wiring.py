@@ -302,6 +302,19 @@ def test_no_v12_core_output_change_from_bias_wiring():
 # No extra MT5 fetch: the wiring reuses bias_map/structure_map already
 # computed, introducing zero new CandleEngine.get_snapshots() calls beyond
 # the initial CandleCache batch.
+#
+# Fix #7X — one new, deliberate, DIFFERENT exception is now expected: a
+# single (symbol, "M30") direct fetch from VolumeProfileEngine.
+# get_previous_week_m30_profile(), called once per symbol from Output.py
+# (unrelated to bias wiring). This fetch is intentionally NOT routed
+# through the shared CandleCache — that cache is keyed by (symbol, tf)
+# only and stores whatever count fetch_all() was called with (100 here),
+# which is nowhere near enough for a previous-completed-week M30 profile
+# (needs ~600 to safely span 2+ weeks); reusing it would silently return
+# only 100 candles with no error. See VolumeProfileEngine's own module
+# docstring for the full audit. This test still asserts no OTHER, still-
+# unexpected fetch occurs beyond that one documented exception -- the
+# original guarantee for BIAS wiring specifically is unchanged.
 # ---------------------------------------------------------------------------
 
 def test_no_extra_fetch_from_bias_wiring():
@@ -327,7 +340,9 @@ def test_no_extra_fetch_from_bias_wiring():
             demand_engine=cr.demand_engine, shift_engine=cr.shift_engine, structure_engine=cr.structure_engine,
             cache=cache, symbols=[symbol],
         )
-        assert len(fetch_calls) == 0
+        # Fix #7X's own explicit, bounded, documented VolumeProfileEngine
+        # fetch is the ONLY exception permitted here.
+        assert fetch_calls == [(symbol, "M30")]
     finally:
         CandleEngine.get_snapshots = original_get_snapshots
 

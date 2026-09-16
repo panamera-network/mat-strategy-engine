@@ -168,6 +168,16 @@ def to_strategy_snapshot(structure: StructureSnapshot) -> StrategySnapshot:
         snr_flip_breakout_timestamp=getattr(structure, "snr_flip_breakout_timestamp", None),
         snr_flip_retest_index=getattr(structure, "snr_flip_retest_index", None),
         snr_flip_retest_timestamp=getattr(structure, "snr_flip_retest_timestamp", None),
+        # Fix #7X — straight copy, no recomputation, no new fetch.
+        volume_profile_source_type=getattr(structure, "volume_profile_source_type", None),
+        volume_profile_range_start_timestamp=getattr(structure, "volume_profile_range_start_timestamp", None),
+        volume_profile_range_end_timestamp=getattr(structure, "volume_profile_range_end_timestamp", None),
+        volume_profile_poc=getattr(structure, "volume_profile_poc", None),
+        volume_profile_vah=getattr(structure, "volume_profile_vah", None),
+        volume_profile_val=getattr(structure, "volume_profile_val", None),
+        volume_profile_total_volume=getattr(structure, "volume_profile_total_volume", None),
+        volume_profile_value_area_pct=getattr(structure, "volume_profile_value_area_pct", None),
+        volume_profile_num_bins=getattr(structure, "volume_profile_num_bins", None),
     )
 
 

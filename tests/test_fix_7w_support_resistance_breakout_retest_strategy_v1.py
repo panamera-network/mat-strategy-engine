@@ -450,10 +450,14 @@ def test_detect_snr_role_flip_never_calls_structure_detection():
 # Discovery.
 # ---------------------------------------------------------------------------
 
-def test_strategy_engine_discovers_twentyone_strategies_now():
+def test_support_resistance_breakout_retest_strategy_present_in_engine():
+    """Fix #7W's own discovery-count test goes stale the moment a later
+    fix adds another strategy (Fix #7X bumps 21 -> 22) -- this checks only
+    that THIS fix's own strategy is present, not the total count. See
+    test_fix_7x_volume_profile_foundation_and_weekly_reaction_v1.py for
+    the current total-count/full-roster tests."""
     from core.strategy.StrategyEngine import StrategyEngine
     engine = StrategyEngine()
-    assert len(engine.strategies) == 21
     assert "SupportResistanceBreakoutRetestStrategy" in engine.enabled
 
 

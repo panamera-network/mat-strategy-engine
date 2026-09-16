@@ -220,6 +220,22 @@ class StrategySnapshot:
     snr_flip_breakout_timestamp: Optional[str] = None
     snr_flip_retest_index: Optional[int] = None
     snr_flip_retest_timestamp: Optional[str] = None
+    # Fix #7X — canonical previous-completed-week M30 Volume Profile
+    # evidence, straight copy from StructureSnapshot.volume_profile_*
+    # (itself computed ONCE per symbol by Output.py via VolumeProfileEngine
+    # -- see StructureSnapshot's own docstring for the full audit/wiring
+    # path). volume_profile_source_type is always "candle_approximation"
+    # in this fix -- never genuine tick-traded volume. No new formula, no
+    # recomputation, no new fetch in this Strategy layer.
+    volume_profile_source_type: Optional[str] = None
+    volume_profile_range_start_timestamp: Optional[str] = None
+    volume_profile_range_end_timestamp: Optional[str] = None
+    volume_profile_poc: Optional[float] = None
+    volume_profile_vah: Optional[float] = None
+    volume_profile_val: Optional[float] = None
+    volume_profile_total_volume: Optional[float] = None
+    volume_profile_value_area_pct: Optional[float] = None
+    volume_profile_num_bins: Optional[int] = None
 
 def price_from_snapshot(snapshot: StrategySnapshot) -> Optional[float]:
     """A representative chart price for a signal — for placing a marker/zone

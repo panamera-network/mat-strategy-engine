@@ -14,6 +14,7 @@ from core.SnapshotCache import snapshot_cache
 from core.StyleEngine import get_style_snapshot
 from core.core_models import StrengthDiagnostic
 from core.strategy.StrategyEngine import strategy_engine, to_strategy_snapshot
+from core.VolumeProfileEngine import volume_profile_engine
 from mt5.constants import SYMBOLS, TIMEFRAMES
 
 logger = logging.getLogger(__name__)
@@ -441,6 +442,26 @@ def _build_symbol_snapshot(
         if structure is not None:
             structure.conviction = style_snap.conviction
             structure.conviction_direction = style_snap.direction
+
+    # Fix #7X — canonical previous-completed-week M30 Volume Profile
+    # evidence, computed ONCE per symbol (an explicit, bounded, dedicated
+    # M30 fetch -- see VolumeProfileEngine's own module docstring for why
+    # it cannot reuse the general per-request CandleCache) and set
+    # post-hoc onto every timeframe's StructureSnapshot, since the profile
+    # itself is symbol-scoped, not tf-scoped -- the same "compute once,
+    # assign post-hoc" pattern Fix #7C/#7S already established for
+    # bias/conviction above.
+    volume_profile = volume_profile_engine.get_previous_week_m30_profile(symbol)
+    for structure in structure_map.values():
+        structure.volume_profile_source_type = volume_profile.source_type if volume_profile else None
+        structure.volume_profile_range_start_timestamp = volume_profile.range_start_timestamp if volume_profile else None
+        structure.volume_profile_range_end_timestamp = volume_profile.range_end_timestamp if volume_profile else None
+        structure.volume_profile_poc = volume_profile.poc_price if volume_profile else None
+        structure.volume_profile_vah = volume_profile.value_area_high if volume_profile else None
+        structure.volume_profile_val = volume_profile.value_area_low if volume_profile else None
+        structure.volume_profile_total_volume = volume_profile.total_volume if volume_profile else None
+        structure.volume_profile_value_area_pct = volume_profile.value_area_pct if volume_profile else None
+        structure.volume_profile_num_bins = volume_profile.num_bins if volume_profile else None
 
     swing_alignment = compute_alignment_signal(swing_map_raw, mode="swing")
     swing_history = _update_alignment_history(prev_snapshot, "swing_alignment_history", swing_alignment)

@@ -206,6 +206,59 @@ class OrderBlock:
 
 
 @dataclass
+class VolumeProfileBin:
+    """Fix #7X — one price bin of a Volume Profile: its price range and the
+    activity/volume attributed to it. `volume` is whatever unit the source
+    profile uses (see VolumeProfile.source_type) -- never assume traded
+    size unless source_type says so."""
+    price_low: float
+    price_high: float
+    volume: float = 0.0
+
+
+@dataclass
+class VolumeProfile:
+    """Fix #7X — canonical Volume Profile representation, generic over ANY
+    candle range so the same builder (structure_utils... see
+    core.VolumeProfileEngine.build_volume_profile()) can serve this fix's
+    V1 (previous-completed-week M30), a future V2 (engine-detected
+    accumulation range), and a future V3 (user-selected manual range)
+    without redefining the profile shape each time.
+
+    source_type is either "candle_approximation" (this repo's only
+    currently-honest option -- see VolumeProfileEngine's own module
+    docstring for the full audit: no tick-fetching exists anywhere in this
+    codebase, and this broker's tick/real volume fields do not represent
+    genuine traded size even at tick granularity) or "tick_activity"
+    (reserved for a future fix IF genuine tick-level fetching is ever
+    added and justified -- never used today). A consumer must never treat
+    "candle_approximation" evidence as true traded-volume-by-price.
+
+    bins are ordered low-to-high by price and always exactly num_bins long
+    (a placeholder empty-volume bin where no candle contributed). poc_price
+    is the midpoint of the highest-volume bin; value_area_high/low are the
+    top/bottom price of the contiguous bin range expanding outward from
+    the POC bin until value_area_pct of total_volume is captured (v1: one
+    bin at a time, always expanding toward whichever adjacent side has
+    more volume -- the standard "expand from POC" Volume Profile
+    convention). None/0.0 fields mean no profile could be built (see
+    VolumeProfileEngine.get_previous_week_m30_profile()'s own docstring
+    for when that happens)."""
+    symbol: str
+    timeframe: str
+    range_start_timestamp: str
+    range_end_timestamp: str
+    bins: List[VolumeProfileBin]
+    poc_price: float
+    value_area_high: float
+    value_area_low: float
+    total_volume: float
+    value_area_pct: float
+    num_bins: int
+    source_type: str = "candle_approximation"
+
+
+@dataclass
 class FVG:
     type: str            # "Bullish" or "Bearish"
     top: float
@@ -455,6 +508,27 @@ class StructureSnapshot:
     snr_flip_breakout_timestamp: str | None = None
     snr_flip_retest_index: int | None = None
     snr_flip_retest_timestamp: str | None = None
+    # Fix #7X — canonical previous-completed-week M30 Volume Profile
+    # evidence, computed ONCE per symbol by core.Output.Output.py (the
+    # profile is symbol-scoped, not tf-scoped -- the SAME previous-week
+    # M30 profile applies regardless of which chart timeframe this
+    # snapshot itself is for) and set post-hoc, the same pattern Fix
+    # #7C/#7S already established for bias/conviction. See
+    # VolumeProfileEngine.get_previous_week_m30_profile()'s own docstring
+    # for the full audit rationale (candle-level approximation, never
+    # genuine tick-traded volume -- see volume_profile_source_type).
+    # All None until Output.py's wiring runs (same caveat as bias/
+    # conviction above for a direct StructureEngine.get_snapshot() call
+    # that bypasses Output.py).
+    volume_profile_source_type: str | None = None
+    volume_profile_range_start_timestamp: str | None = None
+    volume_profile_range_end_timestamp: str | None = None
+    volume_profile_poc: float | None = None
+    volume_profile_vah: float | None = None
+    volume_profile_val: float | None = None
+    volume_profile_total_volume: float | None = None
+    volume_profile_value_area_pct: float | None = None
+    volume_profile_num_bins: int | None = None
 
     @property
     def body_dominance(self) -> float:
