@@ -536,11 +536,27 @@ def test_confidence_bounded_and_exact_formula():
         assert 0.0 <= r["confidence"] <= 1.0
 
 
-def test_strategy_engine_discovers_fourteen_strategies_now():
+def test_strategy_engine_discovers_breakout_retest_strategy():
+    """Originally asserted the discovered count equals exactly 14 -- Fix
+    #7Q later added a genuinely new 15th strategy
+    (MTFBiasCascadeStrategy), which made that exact-count snapshot stale
+    (a real, intended addition, not a regression -- see
+    tests/test_fix_7q_mtf_bias_cascade_strategy_v1.py::test_strategy_engine_discovers_fifteen_strategies_now
+    for that fix's own count assertion). Rewritten to check the actual
+    invariant this test exists for -- BreakoutRetestStrategy is discovered
+    alongside the original 13 -- rather than a total count that any
+    future new strategy would otherwise make stale again."""
     from core.strategy.StrategyEngine import StrategyEngine
     engine = StrategyEngine()
-    assert len(engine.strategies) == 14
     assert "BreakoutRetestStrategy" in engine.enabled
+    existing_thirteen = {
+        "BiasContinuationScalpingStrategy", "BiasContinuationSwingStrategy",
+        "DoubleEngulfingStrategy", "ZoneContinuationStrategy",
+        "ScalpingBiasCascade", "GroupedLastCandleBiasStrategy", "LastCandleBiasStrategy",
+        "StructureReversalStrategy", "IPCStrategy", "TrendContinuationStrategy",
+        "FreshZoneReactionStrategy", "MitigationSecondTouchStrategy", "MomentumExpansionStrategy",
+    }
+    assert existing_thirteen <= set(engine.enabled.keys())
 
 
 def test_existing_thirteen_strategies_still_discovered():
