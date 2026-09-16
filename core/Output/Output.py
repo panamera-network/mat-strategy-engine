@@ -429,6 +429,19 @@ def _build_symbol_snapshot(
         tf: get_style_snapshot(symbol, tf, "swing", bias_engine, momentum_engine, demand_engine, structure_engine, shift_engine, cache=cache, structure_snapshot=structure_map.get(tf))
         for tf in SWING_ORDER
     }
+
+    # Fix #7S -- StructureSnapshot.conviction/conviction_direction, straight
+    # copy from the StyleSnapshot already built above for this exact
+    # (symbol, tf) (scalping_map/swing_map_raw together cover every
+    # structure_map key -- SCALPING_ORDER + SWING_ORDER == BIAS_ORDER). No
+    # recomputation, no new formula, no new fetch -- same post-hoc-
+    # assignment pattern Fix #7C used for structure.bias above.
+    for tf, style_snap in {**scalping_map, **swing_map_raw}.items():
+        structure = structure_map.get(tf)
+        if structure is not None:
+            structure.conviction = style_snap.conviction
+            structure.conviction_direction = style_snap.direction
+
     swing_alignment = compute_alignment_signal(swing_map_raw, mode="swing")
     swing_history = _update_alignment_history(prev_snapshot, "swing_alignment_history", swing_alignment)
 

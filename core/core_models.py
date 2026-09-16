@@ -355,6 +355,25 @@ class StructureSnapshot:
     retest_index: int | None = None
     retest_timestamp: str | None = None
     retest_confirmed: bool = False
+    # Fix #7S -- canonical conviction evidence, straight copy from this same
+    # (symbol, tf)'s already-computed StyleSnapshot.conviction/direction
+    # (StyleEngine.get_style_snapshot() -> StyleSnapshot.compute_conviction(),
+    # Fix #6AK) -- set post-hoc by Output.py, the same pattern Fix #7C used
+    # for `bias` above (StructureEngine itself has no StyleEngine
+    # dependency; adding that edge here would create a cycle, since
+    # StyleEngine already depends on StructureEngine). No recomputation, no
+    # new formula, no new fetch -- StyleSnapshot for this exact (symbol, tf)
+    # is already built by Output.py for the scalping/swing display blocks.
+    # conviction is StyleSnapshot's own [0,1], direction-relative score
+    # (opposition/no-direction floors to 0, never negative);
+    # conviction_direction is StyleSnapshot.direction verbatim
+    # ("uptrend"/"downtrend"/"neutral" -- BiasEngine's bias_label
+    # vocabulary, NOT the "Bullish"/"Bearish"/"Neutral" vocabulary `bias`
+    # above uses). Both None until Output.py's wiring runs (e.g. direct
+    # StructureEngine.get_snapshot() calls that bypass Output.py, same
+    # caveat as `bias` above per Fix #7C's own documented gap).
+    conviction: float | None = None
+    conviction_direction: str | None = None
 
     @property
     def body_dominance(self) -> float:

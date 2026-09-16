@@ -132,6 +132,9 @@ def to_strategy_snapshot(structure: StructureSnapshot) -> StrategySnapshot:
         retest_index=getattr(structure, "retest_index", None),
         retest_timestamp=getattr(structure, "retest_timestamp", None),
         retest_confirmed=getattr(structure, "retest_confirmed", False),
+        # Fix #7S -- straight copy, no recomputation, no new fetch.
+        conviction=getattr(structure, "conviction", None),
+        conviction_direction=getattr(structure, "conviction_direction", None),
     )
 
 

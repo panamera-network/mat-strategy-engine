@@ -144,6 +144,18 @@ class StrategySnapshot:
     retest_index: Optional[int] = None
     retest_timestamp: Optional[str] = None
     retest_confirmed: bool = False
+    # Fix #7S -- canonical conviction evidence, straight copy from
+    # StructureSnapshot.conviction/conviction_direction (itself a straight
+    # copy of this same (symbol, tf)'s already-computed StyleSnapshot.
+    # conviction/direction, Fix #6AK -- see StructureSnapshot's own
+    # docstring for the full wiring path). conviction is already [0,1],
+    # direction-relative (opposition/no-direction floors to 0). No new
+    # formula, no recomputation, no new fetch -- and no Strategy should
+    # ever recompute it independently. conviction_direction uses
+    # BiasEngine's bias_label vocabulary ("uptrend"/"downtrend"/"neutral"),
+    # NOT the "Bullish"/"Bearish"/"Neutral" vocabulary `bias` above uses.
+    conviction: Optional[float] = None
+    conviction_direction: Optional[str] = None
 
 def price_from_snapshot(snapshot: StrategySnapshot) -> Optional[float]:
     """A representative chart price for a signal — for placing a marker/zone
