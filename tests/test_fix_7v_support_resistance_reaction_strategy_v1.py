@@ -362,10 +362,14 @@ def test_standard_output_fields_present():
         assert key in result
 
 
-def test_strategy_engine_discovers_twenty_strategies_now():
+def test_support_resistance_reaction_strategy_present_in_engine():
+    """Fix #7V's own discovery-count test goes stale the moment a later
+    fix adds another strategy (Fix #7W bumps 20 -> 21) -- this checks only
+    that THIS fix's own strategy is present, not the total count. See
+    test_fix_7w_support_resistance_breakout_retest_strategy_v1.py for the
+    current total-count/full-roster tests."""
     from core.strategy.StrategyEngine import StrategyEngine
     engine = StrategyEngine()
-    assert len(engine.strategies) == 20
     assert "SupportResistanceReactionStrategy" in engine.enabled
 
 

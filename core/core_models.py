@@ -435,6 +435,26 @@ class StructureSnapshot:
     # merely touching it with a wick -- current_high/current_low alone
     # cannot answer that. No new fetch, no recomputation.
     current_close: float | None = None
+    # Fix #7W — genuine S&R role-flip evidence (Resistance broken bullishly
+    # and later held as Support, or Support broken bearishly and later
+    # held as Resistance), computed by structure_utils.detect_snr_role_
+    # flip() over this same already-derived snr_levels list and the same
+    # already-fetched candle window (no new fetch, no new S&R detection,
+    # not coupled to any BOS/CHoCH structure_event). snr_flip_direction is
+    # "Bullish"/"Bearish" (structure-layer vocabulary, same as
+    # structure_direction/choch_* above) describing which side broke out,
+    # not the eventual long/short trade direction a Strategy derives from
+    # it. All None/False together when no Resistance or Support level in
+    # snr_levels has a confirmed breakout-then-retest.
+    snr_flip_confirmed: bool = False
+    snr_flip_direction: str | None = None
+    snr_flip_original_role: str | None = None
+    snr_flip_new_role: str | None = None
+    snr_flip_level: float | None = None
+    snr_flip_breakout_index: int | None = None
+    snr_flip_breakout_timestamp: str | None = None
+    snr_flip_retest_index: int | None = None
+    snr_flip_retest_timestamp: str | None = None
 
     @property
     def body_dominance(self) -> float:

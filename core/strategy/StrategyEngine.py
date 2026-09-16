@@ -158,6 +158,16 @@ def to_strategy_snapshot(structure: StructureSnapshot) -> StrategySnapshot:
         momentum_recovery_value=getattr(structure, "momentum_recovery_value", None),
         # Fix #7V -- straight copy, no recomputation, no new fetch.
         current_close=getattr(structure, "current_close", None),
+        # Fix #7W — straight copy, no recomputation, no new fetch.
+        snr_flip_confirmed=getattr(structure, "snr_flip_confirmed", False),
+        snr_flip_direction=getattr(structure, "snr_flip_direction", None),
+        snr_flip_original_role=getattr(structure, "snr_flip_original_role", None),
+        snr_flip_new_role=getattr(structure, "snr_flip_new_role", None),
+        snr_flip_level=getattr(structure, "snr_flip_level", None),
+        snr_flip_breakout_index=getattr(structure, "snr_flip_breakout_index", None),
+        snr_flip_breakout_timestamp=getattr(structure, "snr_flip_breakout_timestamp", None),
+        snr_flip_retest_index=getattr(structure, "snr_flip_retest_index", None),
+        snr_flip_retest_timestamp=getattr(structure, "snr_flip_retest_timestamp", None),
     )
 
 

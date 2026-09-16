@@ -284,6 +284,152 @@ def detect_breakout_retest(candles: List[CandleSnapshot], structure_event: Dict)
     }
 
 
+def detect_snr_breakout_retest(candles: List[CandleSnapshot], level: float, direction: str) -> Dict:
+    """Fix #7W — generic S&R-level breakout-then-later-retest scan: the
+    SAME current-leg-origin + touch-and-hold algorithm detect_breakout_
+    retest() above uses for a structure break's broken_level, applied here
+    to a plain (level, direction) pair with NO structure_event/BOS/CHoCH
+    involved at all — so it can be reused for any S&R level, independent
+    of whether that level was ever the subject of a BOS/CHoCH. Reuses
+    _find_current_leg_origin() (one shared implementation, not a second
+    independent one) and the identical wick-overlap tolerance
+    detect_breakout_retest() already established
+    (max(candle_range * 0.25, abs(level) * 0.0003)).
+
+    "Holds" semantics, same as detect_breakout_retest(): a touch only
+    counts as a genuine retest if that candle's CLOSE stays on the broken
+    side of the level (Bullish: close >= level; Bearish: close <= level).
+
+    Returns breakout_index/timestamp (the start of the CURRENT unbroken
+    leg beyond `level`) and retest_index/timestamp/retest_confirmed — all
+    None/False when `level`/`direction` are missing, the current candle
+    isn't beyond the level, the origin IS the current candle (no time has
+    passed for a retest yet), or no later candle both touches and holds.
+    See detect_snr_role_flip() below for how this is applied across a full
+    snr_levels list to find genuine role-flip evidence."""
+    no_evidence = {
+        "breakout_index": None, "breakout_timestamp": None,
+        "retest_index": None, "retest_timestamp": None, "retest_confirmed": False,
+    }
+    if level is None or direction not in ("Bullish", "Bearish"):
+        return no_evidence
+
+    def beyond(c) -> bool:
+        return c.close > level if direction == "Bullish" else c.close < level
+
+    current_index = len(candles) - 1
+    if not beyond(candles[current_index]):
+        return no_evidence
+
+    breakout_index = _find_current_leg_origin(candles, current_index, level, direction)
+    if breakout_index >= current_index:
+        return no_evidence
+
+    breakout_candle = candles[breakout_index]
+    candle_range = abs(breakout_candle.high - breakout_candle.low)
+    tolerance = max(candle_range * 0.25, abs(level) * 0.0003)
+
+    retest_index = None
+    for i in range(breakout_index + 1, current_index):
+        c = candles[i]
+        touches = (c.low - tolerance) <= level <= (c.high + tolerance)
+        if not touches:
+            continue
+        held = (c.close >= level) if direction == "Bullish" else (c.close <= level)
+        if held:
+            retest_index = i
+            break
+
+    if retest_index is None:
+        return no_evidence
+
+    retest_candle = candles[retest_index]
+    return {
+        "breakout_index": breakout_index,
+        "breakout_timestamp": str(breakout_candle.timestamp),
+        "retest_index": retest_index,
+        "retest_timestamp": str(retest_candle.timestamp),
+        "retest_confirmed": True,
+    }
+
+
+def detect_snr_role_flip(candles: List[CandleSnapshot], snr_levels: List[SNRLevel]) -> Dict:
+    """Fix #7W — genuine S&R role-flip evidence: a canonical Resistance
+    level genuinely broken by a close above it and later revisited and
+    held as Support, or a canonical Support level broken by a close below
+    it and later revisited and held as Resistance.
+
+    Audit finding this function exists to fix: StrategyEngine._snr_context()
+    (nearest_support/nearest_resistance/snr_context/snr_strength) only
+    ever reports the CURRENT nearest level by proximity to "now" — it has
+    no memory of whether a level was ever broken, nor of when. A single
+    StrategySnapshot therefore cannot, by itself, prove "this used to be
+    Resistance, price broke above it, and later came back down and held
+    above it as Support" — only that some level is nearby right now.
+    Deliberately NOT built on detect_structure_event()/detect_breakout_
+    retest()'s structure_event: a BOS/CHoCH's broken_level is a swing-based
+    STRUCTURE level, a different concept from an S&R level (this repo's own
+    #7V/#7J audits already established snr_levels as the canonical S&R
+    source — a level can be genuine S&R without ever being the specific
+    level the most recent BOS/CHoCH broke). This function closes the gap
+    using the SAME already-fetched `candles` window and the SAME already-
+    derived `snr_levels` list (derive_snr_levels(), never recomputed or
+    redefined here) — no new fetch, no new S&R detection.
+
+    For each Resistance level: direction="Bullish" (closing back above an
+    old Resistance is the "holds as Support" half of the flip). For each
+    Support level: direction="Bearish" (closing back below an old Support
+    is the "holds as Resistance" half). Each candidate is tested with
+    detect_snr_breakout_retest() above, unmodified. Same-candle breakout/
+    retest is structurally impossible (the retest scan there never
+    includes the breakout index itself), and a stale, already-invalidated
+    older breakout of the same level can never be reported instead of the
+    current leg, for the same reason _find_current_leg_origin() already
+    proves for Fix #7P/#7T.
+
+    Multiple qualifying levels (rare — e.g. two different Resistance
+    levels both technically satisfy this, or a Resistance and a Support
+    candidate both qualify at once) are resolved by preferring the MOST
+    RECENT retest_index — the freshest confirmed flip, not merely the
+    first candidate in `snr_levels`' price-sorted order. This is a v1
+    tie-break, not a claim that an older qualifying candidate is invalid.
+
+    Returns confirmed/direction/original_role/new_role/level/
+    breakout_index/breakout_timestamp/retest_index/retest_timestamp — all
+    False/None together when no Resistance or Support level in
+    `snr_levels` has a confirmed breakout+retest."""
+    no_evidence = {
+        "confirmed": False, "direction": None, "original_role": None, "new_role": None,
+        "level": None, "breakout_index": None, "breakout_timestamp": None,
+        "retest_index": None, "retest_timestamp": None,
+    }
+    best = None  # (retest_index, bundle) — prefer the most recent retest
+
+    for lvl in snr_levels:
+        if lvl.type == "Resistance":
+            direction, original_role, new_role = "Bullish", "Resistance", "Support"
+        elif lvl.type == "Support":
+            direction, original_role, new_role = "Bearish", "Support", "Resistance"
+        else:
+            continue
+
+        result = detect_snr_breakout_retest(candles, lvl.level, direction)
+        if not result["retest_confirmed"]:
+            continue
+        if best is None or result["retest_index"] > best[0]:
+            best = (result["retest_index"], {
+                "confirmed": True, "direction": direction,
+                "original_role": original_role, "new_role": new_role,
+                "level": lvl.level,
+                "breakout_index": result["breakout_index"],
+                "breakout_timestamp": result["breakout_timestamp"],
+                "retest_index": result["retest_index"],
+                "retest_timestamp": result["retest_timestamp"],
+            })
+
+    return best[1] if best else no_evidence
+
+
 def detect_choch_then_bos(candles: List[CandleSnapshot], current_event: Dict, window: int = SWING_WINDOW) -> Dict:
     """Fix #7T — genuine prior-CHoCH-before-current-BOS sequence evidence.
 

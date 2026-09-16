@@ -204,6 +204,22 @@ class StrategySnapshot:
     # high/current_low alone cannot answer that. No new formula, no
     # recomputation, no new fetch.
     current_close: Optional[float] = None
+    # Fix #7W — genuine S&R role-flip evidence, straight copy from
+    # StructureSnapshot.snr_flip_* (itself computed by structure_utils.
+    # detect_snr_role_flip() — see StructureSnapshot's own docstring for
+    # the full audit/wiring path). snr_flip_direction is "Bullish"/
+    # "Bearish" (which side broke out), NOT the eventual long/short trade
+    # direction a Strategy derives from it. No new formula, no
+    # recomputation, no new fetch.
+    snr_flip_confirmed: bool = False
+    snr_flip_direction: Optional[str] = None
+    snr_flip_original_role: Optional[str] = None
+    snr_flip_new_role: Optional[str] = None
+    snr_flip_level: Optional[float] = None
+    snr_flip_breakout_index: Optional[int] = None
+    snr_flip_breakout_timestamp: Optional[str] = None
+    snr_flip_retest_index: Optional[int] = None
+    snr_flip_retest_timestamp: Optional[str] = None
 
 def price_from_snapshot(snapshot: StrategySnapshot) -> Optional[float]:
     """A representative chart price for a signal — for placing a marker/zone

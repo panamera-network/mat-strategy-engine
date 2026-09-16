@@ -13,6 +13,7 @@ from core.structure_utils import (
     SWING_WINDOW,
     detect_breakout_retest,
     detect_choch_then_bos,
+    detect_snr_role_flip,
     detect_structure_event,
     detect_trend,
     derive_snr_levels,
@@ -65,6 +66,13 @@ class StructureEngine:
         choch_then_bos = detect_choch_then_bos(lookback, structure_event)
         swing_points = label_swing_points(lookback, swing_highs, swing_lows)
         snr_levels = derive_snr_levels(lookback, swing_highs, swing_lows, structure_event)
+        # Fix #7W — reuses the SAME already-fetched `lookback` window and
+        # the SAME already-derived `snr_levels` list (no new fetch, no new
+        # S&R detection, not coupled to structure_event/BOS/CHoCH); scans
+        # for a genuine breakout-then-later-retest role flip on any
+        # Resistance/Support level. See detect_snr_role_flip()'s own
+        # docstring for the full audit rationale.
+        snr_role_flip = detect_snr_role_flip(lookback, snr_levels)
         order_blocks = detect_order_blocks(lookback, [structure_event], timeframe=tf)
         fvg = detect_fvg(lookback, timeframe=tf)
         # Fix #7K -- reuses the same already-fetched `candles` window (no
@@ -266,6 +274,19 @@ class StructureEngine:
             # already in scope above) current_high/current_low already
             # use. No new fetch, no recomputation.
             current_close=curr.close,
+            # Fix #7W — genuine S&R role-flip evidence, computed above via
+            # detect_snr_role_flip() (no duplicate S&R detection, reuses
+            # the already-derived snr_levels list and the already-fetched
+            # lookback window).
+            snr_flip_confirmed=snr_role_flip["confirmed"],
+            snr_flip_direction=snr_role_flip["direction"],
+            snr_flip_original_role=snr_role_flip["original_role"],
+            snr_flip_new_role=snr_role_flip["new_role"],
+            snr_flip_level=snr_role_flip["level"],
+            snr_flip_breakout_index=snr_role_flip["breakout_index"],
+            snr_flip_breakout_timestamp=snr_role_flip["breakout_timestamp"],
+            snr_flip_retest_index=snr_role_flip["retest_index"],
+            snr_flip_retest_timestamp=snr_role_flip["retest_timestamp"],
         )
 
         snapshot.structure_type = structure_event["type"]
