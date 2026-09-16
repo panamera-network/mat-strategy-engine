@@ -12,6 +12,7 @@ from core.structure_utils import (
     SWING_LOOKBACK,
     SWING_WINDOW,
     detect_breakout_retest,
+    detect_choch_then_bos,
     detect_structure_event,
     detect_trend,
     derive_snr_levels,
@@ -54,6 +55,14 @@ class StructureEngine:
         # and any later retest. See detect_breakout_retest()'s own
         # docstring for the full audit rationale (v1 BOS-only).
         breakout_retest = detect_breakout_retest(lookback, structure_event)
+        # Fix #7T -- reuses the SAME already-fetched `lookback` window and
+        # the SAME already-decided structure_event (no duplicate BOS/CHoCH
+        # classification); replays find_swings()/detect_structure_event()
+        # on shorter prefixes of this same window to recover genuine
+        # prior-CHoCH-before-this-BOS sequence evidence. See
+        # detect_choch_then_bos()'s own docstring for the full audit
+        # rationale.
+        choch_then_bos = detect_choch_then_bos(lookback, structure_event)
         swing_points = label_swing_points(lookback, swing_highs, swing_lows)
         snr_levels = derive_snr_levels(lookback, swing_highs, swing_lows, structure_event)
         order_blocks = detect_order_blocks(lookback, [structure_event], timeframe=tf)
@@ -236,6 +245,23 @@ class StructureEngine:
             retest_index=breakout_retest["retest_index"],
             retest_timestamp=breakout_retest["retest_timestamp"],
             retest_confirmed=breakout_retest["retest_confirmed"],
+            # Fix #7T -- genuine prior-CHoCH-before-this-BOS sequence
+            # evidence, computed above via detect_choch_then_bos() (no
+            # duplicate BOS/CHoCH calculation, reuses the already-decided
+            # structure_event and the already-fetched lookback window).
+            choch_confirmed=choch_then_bos["choch_confirmed"],
+            choch_index=choch_then_bos["choch_index"],
+            choch_timestamp=choch_then_bos["choch_timestamp"],
+            choch_broken_level=choch_then_bos["choch_broken_level"],
+            # Fix #7T (BOS origin identity audit) -- the true origin of the
+            # CURRENT BOS leg (Fix #7P's own current-leg backward-origin
+            # principle, reused via the same _find_current_leg_origin()
+            # helper detect_breakout_retest() now also uses) -- NOT
+            # event_index/event_timestamp above, which always describe
+            # "now" and can be several candles later than where this BOS
+            # leg actually began.
+            bos_origin_index=choch_then_bos["bos_origin_index"],
+            bos_origin_timestamp=choch_then_bos["bos_origin_timestamp"],
         )
 
         snapshot.structure_type = structure_event["type"]

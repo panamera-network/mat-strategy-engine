@@ -278,11 +278,28 @@ def test_standard_output_fields_present():
         assert key in result
 
 
-def test_strategy_engine_discovers_seventeen_strategies_now():
+def test_strategy_engine_discovers_conviction_selective_strategy():
+    """Originally asserted the discovered count equals exactly 17 -- Fix
+    #7T later added a genuinely new 18th strategy
+    (CHOCHBOSConfirmationStrategy), which made that exact-count snapshot
+    stale (a real, intended addition, not a regression -- see
+    tests/test_fix_7t_choch_bos_confirmation_strategy_v1.py::test_strategy_engine_discovers_eighteen_strategies_now
+    for that fix's own count assertion). Rewritten to check the actual
+    invariant this test exists for -- ConvictionSelectiveStrategy is
+    discovered alongside the original 16 -- rather than a total count that
+    any future new strategy would otherwise make stale again."""
     from core.strategy.StrategyEngine import StrategyEngine
     engine = StrategyEngine()
-    assert len(engine.strategies) == 17
     assert "ConvictionSelectiveStrategy" in engine.enabled
+    existing_sixteen = {
+        "BiasContinuationScalpingStrategy", "BiasContinuationSwingStrategy",
+        "DoubleEngulfingStrategy", "ZoneContinuationStrategy",
+        "ScalpingBiasCascade", "GroupedLastCandleBiasStrategy", "LastCandleBiasStrategy",
+        "StructureReversalStrategy", "IPCStrategy", "TrendContinuationStrategy",
+        "FreshZoneReactionStrategy", "MitigationSecondTouchStrategy", "MomentumExpansionStrategy",
+        "BreakoutRetestStrategy", "MTFBiasCascadeStrategy", "PriceVolumeAtZoneStrategy",
+    }
+    assert existing_sixteen <= set(engine.enabled.keys())
 
 
 def test_existing_sixteen_strategies_still_discovered():

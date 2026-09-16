@@ -374,6 +374,35 @@ class StructureSnapshot:
     # caveat as `bias` above per Fix #7C's own documented gap).
     conviction: float | None = None
     conviction_direction: str | None = None
+    # Fix #7T -- genuine prior-CHoCH-before-this-BOS sequence evidence,
+    # computed by structure_utils.detect_choch_then_bos() (replays the
+    # canonical find_swings()/detect_structure_event() on shorter prefixes
+    # of this same already-fetched lookback window -- no duplicate BOS/
+    # CHoCH classification, no new fetch, no persistent state). event_
+    # index/event_timestamp above ALWAYS describe the CURRENT/most-recent
+    # confirmed event only; choch_index/choch_timestamp describe a
+    # DIFFERENT, earlier candle -- the true origin of a same-direction
+    # CHoCH found before the current event, only ever populated when the
+    # current event is itself a valid BOS. All False/None together when
+    # the current event is not a valid BOS, or no same-direction CHoCH
+    # was found within the window (v1 scope -- no sequence expiry / max-
+    # bars-between-events rule yet, deferred to a later rule audit).
+    choch_confirmed: bool = False
+    choch_index: int | None = None
+    choch_timestamp: str | None = None
+    choch_broken_level: float | None = None
+    # Fix #7T (BOS origin identity audit, before this fix's first commit)
+    # -- the true origin of the CURRENT BOS leg, computed via the SAME
+    # current-leg backward-origin principle Fix #7P proved for
+    # detect_breakout_retest() (structure_utils._find_current_leg_origin(),
+    # one shared implementation, not a second independent one). event_
+    # index/event_timestamp above always describe "now" -- a BOS can stay
+    # beyond its broken level for several more candles after the real
+    # break, so "now" is not necessarily where the leg began. Only ever
+    # populated together with choch_confirmed=True (same convention as
+    # choch_index/choch_timestamp above).
+    bos_origin_index: int | None = None
+    bos_origin_timestamp: str | None = None
 
     @property
     def body_dominance(self) -> float:

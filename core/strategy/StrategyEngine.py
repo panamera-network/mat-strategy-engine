@@ -135,6 +135,15 @@ def to_strategy_snapshot(structure: StructureSnapshot) -> StrategySnapshot:
         # Fix #7S -- straight copy, no recomputation, no new fetch.
         conviction=getattr(structure, "conviction", None),
         conviction_direction=getattr(structure, "conviction_direction", None),
+        # Fix #7T -- straight copy, no recomputation, no new fetch.
+        choch_confirmed=getattr(structure, "choch_confirmed", False),
+        choch_index=getattr(structure, "choch_index", None),
+        choch_timestamp=getattr(structure, "choch_timestamp", None),
+        choch_broken_level=getattr(structure, "choch_broken_level", None),
+        # Fix #7T (BOS origin identity audit) -- straight copy, no
+        # recomputation, no new fetch.
+        bos_origin_index=getattr(structure, "bos_origin_index", None),
+        bos_origin_timestamp=getattr(structure, "bos_origin_timestamp", None),
     )
 
 

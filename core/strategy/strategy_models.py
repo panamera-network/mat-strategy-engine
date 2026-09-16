@@ -156,6 +156,26 @@ class StrategySnapshot:
     # NOT the "Bullish"/"Bearish"/"Neutral" vocabulary `bias` above uses.
     conviction: Optional[float] = None
     conviction_direction: Optional[str] = None
+    # Fix #7T -- genuine prior-CHoCH-before-this-BOS sequence evidence,
+    # straight copy from StructureSnapshot.choch_confirmed/choch_index/
+    # choch_timestamp/choch_broken_level (itself computed by structure_
+    # utils.detect_choch_then_bos() -- see StructureSnapshot's own
+    # docstring for the full audit/wiring path). event_index/
+    # event_timestamp above always describe the CURRENT event only;
+    # choch_index/choch_timestamp describe a different, earlier candle.
+    # No new formula, no recomputation, no new fetch.
+    choch_confirmed: bool = False
+    choch_index: Optional[int] = None
+    choch_timestamp: Optional[str] = None
+    choch_broken_level: Optional[float] = None
+    # Fix #7T (BOS origin identity audit) -- straight copy from
+    # StructureSnapshot.bos_origin_index/bos_origin_timestamp (the true
+    # origin of the current BOS leg, Fix #7P's own current-leg backward-
+    # origin principle -- see StructureSnapshot's own docstring). Never
+    # event_index/event_timestamp, which always describe "now" and may be
+    # several candles later than where this BOS leg actually began.
+    bos_origin_index: Optional[int] = None
+    bos_origin_timestamp: Optional[str] = None
 
 def price_from_snapshot(snapshot: StrategySnapshot) -> Optional[float]:
     """A representative chart price for a signal — for placing a marker/zone
