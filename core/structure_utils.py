@@ -334,6 +334,10 @@ def label_recent_candles(candles: List[CandleSnapshot], count: int = 3) -> List[
     already computed here, instead of recomputing candle direction/
     timestamp/index itself. Empty list (never a guess/backfill) when there
     aren't at least `count` candles yet.
+
+    Fix #7R -- `volume` on each entry is the same candle's own
+    CandleSnapshot.volume (MT5 tick volume), straight copy from this same
+    already-fetched `candles` window -- no new fetch, no recomputation.
     """
     if len(candles) < count:
         return []
@@ -348,5 +352,8 @@ def label_recent_candles(candles: List[CandleSnapshot], count: int = 3) -> List[
             direction = "bear"
         else:
             direction = "neutral"
-        result.append(CandleDirection(direction=direction, index=base_index + offset, timestamp=str(candle.timestamp)))
+        result.append(CandleDirection(
+            direction=direction, index=base_index + offset, timestamp=str(candle.timestamp),
+            volume=candle.volume,
+        ))
     return result

@@ -168,10 +168,21 @@ class CandleDirection:
     IPC's Ignite/Pullback/Confirmation) can read each candle's direction,
     absolute index, and timestamp directly, instead of recomputing candle
     history itself. index is the candle's absolute position in the window
-    StructureEngine evaluated (same convention as SwingPoint/event_index)."""
+    StructureEngine evaluated (same convention as SwingPoint/event_index).
+
+    Fix #7R -- `volume` is an additive field: the same candle's own
+    CandleSnapshot.volume, straight copy, no recomputation. That field is
+    MT5 tick volume (count of price-quote changes in the period) -- MT5
+    also exposes a separate `real_volume` field which this pipeline has
+    never fetched anywhere (mt5/fetcher.py only reads `tick_volume`); a
+    live audit across the full symbol universe found `real_volume` is 0
+    for every symbol regardless of asset class on this account's feed, so
+    it carries no signal even if it were wired up. `volume` here must
+    never be read as traded/real volume."""
     direction: str  # "bull", "bear", or "neutral"
     index: int
     timestamp: str
+    volume: Optional[float] = None
 
 
 @dataclass
