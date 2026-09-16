@@ -427,6 +427,14 @@ class StructureSnapshot:
     momentum_recovery_index: int | None = None
     momentum_recovery_timestamp: str | None = None
     momentum_recovery_value: float | None = None
+    # Fix #7V -- the current/most-recent candle's own CLOSE price, straight
+    # copy of the same already-fetched current candle current_high/
+    # current_low above already use (candles[-1]). Needed so a Strategy
+    # plugin can determine whether the current candle CLOSED back on the
+    # favorable side of a level (a genuine hold/rejection) rather than
+    # merely touching it with a wick -- current_high/current_low alone
+    # cannot answer that. No new fetch, no recomputation.
+    current_close: float | None = None
 
     @property
     def body_dominance(self) -> float:

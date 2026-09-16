@@ -262,6 +262,10 @@ class StructureEngine:
             # leg actually began.
             bos_origin_index=choch_then_bos["bos_origin_index"],
             bos_origin_timestamp=choch_then_bos["bos_origin_timestamp"],
+            # Fix #7V -- straight copy of the same current candle (curr,
+            # already in scope above) current_high/current_low already
+            # use. No new fetch, no recomputation.
+            current_close=curr.close,
         )
 
         snapshot.structure_type = structure_event["type"]

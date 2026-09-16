@@ -156,6 +156,8 @@ def to_strategy_snapshot(structure: StructureSnapshot) -> StrategySnapshot:
         momentum_recovery_index=getattr(structure, "momentum_recovery_index", None),
         momentum_recovery_timestamp=getattr(structure, "momentum_recovery_timestamp", None),
         momentum_recovery_value=getattr(structure, "momentum_recovery_value", None),
+        # Fix #7V -- straight copy, no recomputation, no new fetch.
+        current_close=getattr(structure, "current_close", None),
     )
 
 

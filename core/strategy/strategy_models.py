@@ -196,6 +196,14 @@ class StrategySnapshot:
     momentum_recovery_index: Optional[int] = None
     momentum_recovery_timestamp: Optional[str] = None
     momentum_recovery_value: Optional[float] = None
+    # Fix #7V -- the current/most-recent candle's own CLOSE price, straight
+    # copy from StructureSnapshot.current_close (itself a straight copy of
+    # the already-fetched current candle current_high/current_low already
+    # use). Needed to determine whether the current candle CLOSED back on
+    # the favorable side of a level (a genuine hold/rejection) -- current_
+    # high/current_low alone cannot answer that. No new formula, no
+    # recomputation, no new fetch.
+    current_close: Optional[float] = None
 
 def price_from_snapshot(snapshot: StrategySnapshot) -> Optional[float]:
     """A representative chart price for a signal — for placing a marker/zone
