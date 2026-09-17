@@ -1,8 +1,9 @@
 from datetime import datetime, timezone
 from typing import List, Optional
 
+from core.BalanceRangeEngine import detect_balance_range
 from core.CandleEngine import CandleEngine
-from core.demand_engine import DemandEngine, derive_freshness_state, derive_structural_evidence, link_zone_to_leg_origin
+from core.demand_engine import DemandEngine, compute_atr, derive_freshness_state, derive_structural_evidence, link_zone_to_leg_origin
 from core.FVGEngine import detect_fvg
 from core.MomentumEngine import MomentumEngine
 from core.OrderBlockEngine import detect_order_blocks
@@ -21,6 +22,7 @@ from core.structure_utils import (
     label_recent_candles,
     label_swing_points,
 )
+from core.VolumeProfileEngine import build_volume_profile
 
 candle_engine = CandleEngine()
 momentum_engine = MomentumEngine(candle_engine)
@@ -321,6 +323,57 @@ class StructureEngine:
         snapshot.momentum_recovery_index = pullback_recovery["recovery_index"]
         snapshot.momentum_recovery_timestamp = pullback_recovery["recovery_timestamp"]
         snapshot.momentum_recovery_value = pullback_recovery["recovery_momentum"]
+
+        # Fix #7Y — Balance Range evidence (canonical, neutral naming --
+        # see core.BalanceRangeEngine's own module docstring for the
+        # rename rationale), detected on THIS SAME (symbol, tf)'s
+        # already-fetched `candles` window (no new fetch -- see
+        # core.BalanceRangeEngine's own module docstring for the
+        # timeframe-choice audit and rationale). compute_atr() is the
+        # SAME canonical ATR(14) helper core.demand_engine already uses
+        # for zone detection -- no second formula. Feeds the detected
+        # range directly into Fix #7X's own unchanged build_volume_
+        # profile() -- no second VP implementation.
+        #
+        # Fix #7Y (temporal-integrity audit, before this fix's first
+        # commit) — detection and the profile it feeds are built from
+        # `candles[:-1]` (everything up to and including candle N-1),
+        # deliberately EXCLUDING the current candle (N) that a Strategy
+        # will react to. A live audit found including candle N could
+        # shift VAH by real amounts (a candle with unusually large
+        # tick_volume measurably moved the value-area boundary) and, more
+        # seriously, could make detection fail ENTIRELY for the exact
+        # geometry a VAH/VAL reaction is supposed to catch: a genuine
+        # rejection candle wicks slightly beyond the old range before
+        # closing back inside, and using it to SEED the backward
+        # expansion (the old design) could blow the compression bound and
+        # report "no range" instead of a valid reaction. The level a
+        # Strategy reacts to must already exist before the reaction
+        # candle is evaluated -- ATR, range detection, and the profile
+        # are now frozen as of N-1; only the Strategy's own eligibility
+        # check (current_high/current_low/current_close, already sourced
+        # from candle N elsewhere on this snapshot) ever looks at N.
+        historical_candles = candles[:-1]
+        balance_atr = compute_atr(historical_candles)
+        balance_range = detect_balance_range(historical_candles, balance_atr)
+        snapshot.balance_range_confirmed = balance_range["confirmed"]
+        snapshot.balance_range_start_index = balance_range["start_index"]
+        snapshot.balance_range_start_timestamp = balance_range["start_timestamp"]
+        snapshot.balance_range_end_index = balance_range["end_index"]
+        snapshot.balance_range_end_timestamp = balance_range["end_timestamp"]
+        snapshot.balance_range_high = balance_range["range_high"]
+        snapshot.balance_range_low = balance_range["range_low"]
+        if balance_range["confirmed"]:
+            range_candles = historical_candles[balance_range["start_index"]:balance_range["end_index"] + 1]
+            balance_profile = build_volume_profile(range_candles, symbol=symbol, timeframe=tf)
+            if balance_profile is not None:
+                snapshot.balance_range_poc = balance_profile.poc_price
+                snapshot.balance_range_vah = balance_profile.value_area_high
+                snapshot.balance_range_val = balance_profile.value_area_low
+                snapshot.balance_range_total_volume = balance_profile.total_volume
+                snapshot.balance_range_value_area_pct = balance_profile.value_area_pct
+                snapshot.balance_range_num_bins = balance_profile.num_bins
+                snapshot.balance_range_source_type = balance_profile.source_type
 
         strength_diag = strength_engine.compute_strength(candles)
         snapshot.strength = strength_diag.strength

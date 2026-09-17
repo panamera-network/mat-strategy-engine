@@ -178,6 +178,21 @@ def to_strategy_snapshot(structure: StructureSnapshot) -> StrategySnapshot:
         volume_profile_total_volume=getattr(structure, "volume_profile_total_volume", None),
         volume_profile_value_area_pct=getattr(structure, "volume_profile_value_area_pct", None),
         volume_profile_num_bins=getattr(structure, "volume_profile_num_bins", None),
+        # Fix #7Y — straight copy, no recomputation, no new fetch.
+        balance_range_confirmed=getattr(structure, "balance_range_confirmed", False),
+        balance_range_start_index=getattr(structure, "balance_range_start_index", None),
+        balance_range_start_timestamp=getattr(structure, "balance_range_start_timestamp", None),
+        balance_range_end_index=getattr(structure, "balance_range_end_index", None),
+        balance_range_end_timestamp=getattr(structure, "balance_range_end_timestamp", None),
+        balance_range_high=getattr(structure, "balance_range_high", None),
+        balance_range_low=getattr(structure, "balance_range_low", None),
+        balance_range_poc=getattr(structure, "balance_range_poc", None),
+        balance_range_vah=getattr(structure, "balance_range_vah", None),
+        balance_range_val=getattr(structure, "balance_range_val", None),
+        balance_range_total_volume=getattr(structure, "balance_range_total_volume", None),
+        balance_range_value_area_pct=getattr(structure, "balance_range_value_area_pct", None),
+        balance_range_num_bins=getattr(structure, "balance_range_num_bins", None),
+        balance_range_source_type=getattr(structure, "balance_range_source_type", None),
     )
 
 

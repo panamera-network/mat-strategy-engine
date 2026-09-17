@@ -49,6 +49,7 @@ from typing import Dict, List, Optional
 
 from core.CandleEngine import CandleEngine
 from core.core_models import CandleSnapshot, VolumeProfile, VolumeProfileBin
+from core.strategy.chart_markings import make_chart_marking
 
 # Fix #7X — bin COUNT is fixed, bin WIDTH is derived from the profile's own
 # observed [low, high] range -- this is what makes bin sizing instrument-
@@ -92,8 +93,8 @@ def build_volume_profile(
     source_type: str = "candle_approximation",
 ) -> Optional[VolumeProfile]:
     """Fix #7X — generic Volume Profile builder over ANY candle range. This
-    is the ONE shared foundation V1 (previous-completed-week M30), a
-    future V2 (engine-detected accumulation range), and a future V3
+    is the ONE shared foundation V1 (previous-completed-week M30), V2
+    (Fix #7Y's engine-detected Balance Range), and a future V3
     (user-selected manual range) must all build on -- the range itself is
     entirely the caller's choice (this function has no opinion on how
     `candles` was selected), only the profile MATH is shared.
@@ -219,6 +220,59 @@ def get_previous_completed_week_candles(candles: List[CandleSnapshot]) -> List[C
 
     previous_week_key = ordered_keys[-2]
     return weeks[previous_week_key]
+
+
+def build_profile_marking(
+    *,
+    strategy: str,
+    timeframe: str,
+    label: str,
+    poc: float,
+    vah: float,
+    val: float,
+    source_type: str,
+    total_volume: float,
+    value_area_pct: float,
+    range_type: str,
+    range_high: float = None,
+    range_low: float = None,
+    range_start_timestamp: str = None,
+    range_end_timestamp: str = None,
+    start_index: int = None,
+    end_index: int = None,
+    direction: str = None,
+) -> Dict:
+    """Fix #7Y — reusable "profile" chart marking builder for ANY Volume
+    Profile evidence (this fix's Balance Range, Fix #7X's previous-week
+    profile, or a future Manual Range) -- one shared implementation via
+    the canonical chart_markings.make_chart_marking() contract, not a
+    second marking builder per VP variant.
+
+    Takes plain scalars (never a whole VolumeProfile object) because
+    Strategy plugins only ever see flattened scalar fields via
+    StrategySnapshot (the established convention throughout this
+    codebase -- engine-side dataclasses are never threaded through to the
+    Strategy layer). `range_type` distinguishes which VP source this
+    marking describes (e.g. "balance_range", a future "manual_range") --
+    Fix #7X's own committed strategy is UNCHANGED by this addition and
+    does not use this helper."""
+    evidence_ref = {
+        "source": "volume_profile",
+        "range_type": range_type,
+        "range_high": range_high,
+        "range_low": range_low,
+        "source_type": source_type,
+        "total_volume": total_volume,
+        "value_area_pct": value_area_pct,
+    }
+    return make_chart_marking(
+        "profile", strategy, timeframe, label,
+        direction=direction,
+        price=poc, top=vah, bottom=val,
+        start_timestamp=range_start_timestamp, end_timestamp=range_end_timestamp,
+        start_index=start_index, end_index=end_index,
+        evidence_ref=evidence_ref,
+    )
 
 
 class VolumeProfileEngine:

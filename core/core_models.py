@@ -221,9 +221,9 @@ class VolumeProfile:
     """Fix #7X — canonical Volume Profile representation, generic over ANY
     candle range so the same builder (structure_utils... see
     core.VolumeProfileEngine.build_volume_profile()) can serve this fix's
-    V1 (previous-completed-week M30), a future V2 (engine-detected
-    accumulation range), and a future V3 (user-selected manual range)
-    without redefining the profile shape each time.
+    V1 (previous-completed-week M30), V2 (Fix #7Y's engine-detected
+    Balance Range), and a future V3 (user-selected manual range) without
+    redefining the profile shape each time.
 
     source_type is either "candle_approximation" (this repo's only
     currently-honest option -- see VolumeProfileEngine's own module
@@ -529,6 +529,41 @@ class StructureSnapshot:
     volume_profile_total_volume: float | None = None
     volume_profile_value_area_pct: float | None = None
     volume_profile_num_bins: int | None = None
+    # Fix #7Y — Balance Range Volume Profile evidence (canonical, neutral
+    # naming — see core.BalanceRangeEngine's own module docstring for the
+    # rename rationale: this module was originally "AccumulationRange...",
+    # renamed because nothing in this codebase can distinguish genuine
+    # accumulation from distribution from generic sideways chop). Computed
+    # by StructureEngine.get_snapshot() itself (unlike Fix #7X's
+    # previous-week evidence, this is detected on the CURRENT strategy
+    # timeframe using the SAME already-fetched `candles` window -- no new
+    # fetch, no Output.py post-hoc wiring needed; see
+    # core.BalanceRangeEngine's own module docstring for the full
+    # evidence audit, timeframe-choice rationale, and live threshold
+    # audit). A "Balance Range" is only a bounded consolidation suitable
+    # for Volume Profile analysis -- never a claim of accumulation,
+    # distribution, or any other directional intent. A future PO3
+    # strategy may consume this SAME evidence and re-label it "PO3
+    # Accumulation" only once Manipulation and Distribution are
+    # independently proven elsewhere -- this module never makes that
+    # call. balance_range_source_type is always "candle_approximation"
+    # (the same committed build_volume_profile() from Fix #7X, never a
+    # second VP implementation). All None/False together when no
+    # qualifying range is found for this candle window.
+    balance_range_confirmed: bool = False
+    balance_range_start_index: int | None = None
+    balance_range_start_timestamp: str | None = None
+    balance_range_end_index: int | None = None
+    balance_range_end_timestamp: str | None = None
+    balance_range_high: float | None = None
+    balance_range_low: float | None = None
+    balance_range_poc: float | None = None
+    balance_range_vah: float | None = None
+    balance_range_val: float | None = None
+    balance_range_total_volume: float | None = None
+    balance_range_value_area_pct: float | None = None
+    balance_range_num_bins: int | None = None
+    balance_range_source_type: str | None = None
 
     @property
     def body_dominance(self) -> float:

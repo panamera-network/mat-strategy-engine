@@ -236,6 +236,29 @@ class StrategySnapshot:
     volume_profile_total_volume: Optional[float] = None
     volume_profile_value_area_pct: Optional[float] = None
     volume_profile_num_bins: Optional[int] = None
+    # Fix #7Y — Balance Range Volume Profile evidence (canonical, neutral
+    # naming -- see core.BalanceRangeEngine's own module docstring for
+    # the rename rationale), straight copy from StructureSnapshot.
+    # balance_range_* (itself computed ONCE per (symbol, tf) by
+    # StructureEngine.get_snapshot() on the current strategy timeframe --
+    # see StructureSnapshot's own docstring for the full audit/wiring
+    # path). A "Balance Range" is only a bounded consolidation, never a
+    # confirmed-accumulation (or distribution) claim. No new formula, no
+    # recomputation, no new fetch in this Strategy layer.
+    balance_range_confirmed: bool = False
+    balance_range_start_index: Optional[int] = None
+    balance_range_start_timestamp: Optional[str] = None
+    balance_range_end_index: Optional[int] = None
+    balance_range_end_timestamp: Optional[str] = None
+    balance_range_high: Optional[float] = None
+    balance_range_low: Optional[float] = None
+    balance_range_poc: Optional[float] = None
+    balance_range_vah: Optional[float] = None
+    balance_range_val: Optional[float] = None
+    balance_range_total_volume: Optional[float] = None
+    balance_range_value_area_pct: Optional[float] = None
+    balance_range_num_bins: Optional[int] = None
+    balance_range_source_type: Optional[str] = None
 
 def price_from_snapshot(snapshot: StrategySnapshot) -> Optional[float]:
     """A representative chart price for a signal — for placing a marker/zone

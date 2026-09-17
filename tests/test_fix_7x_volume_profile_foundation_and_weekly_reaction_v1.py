@@ -451,10 +451,14 @@ def test_poc_interaction_not_implemented_in_v1():
 # Discovery.
 # ---------------------------------------------------------------------------
 
-def test_strategy_engine_discovers_twentytwo_strategies_now():
+def test_volume_profile_weekly_reaction_strategy_present_in_engine():
+    """Fix #7X's own discovery-count test goes stale the moment a later
+    fix adds another strategy (Fix #7Y bumps 22 -> 23) -- this checks only
+    that THIS fix's own strategy is present, not the total count. See
+    test_fix_7y_balance_range_volume_profile_v1.py for the current
+    total-count/full-roster tests."""
     from core.strategy.StrategyEngine import StrategyEngine
     engine = StrategyEngine()
-    assert len(engine.strategies) == 22
     assert "VolumeProfileWeeklyReactionStrategy" in engine.enabled
 
 
