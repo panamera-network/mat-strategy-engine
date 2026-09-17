@@ -621,10 +621,14 @@ def test_detector_itself_still_treats_its_own_input_last_candle_as_current():
 # Discovery.
 # ---------------------------------------------------------------------------
 
-def test_strategy_engine_discovers_twentythree_strategies_now():
+def test_balance_range_vah_val_reaction_strategy_present_in_engine():
+    """Fix #7Y's own discovery-count test goes stale the moment a later
+    fix adds another strategy (Fix #7AA bumps 23 -> 24) -- this checks
+    only that THIS fix's own strategy is present, not the total count.
+    See test_fix_7aa_inside_bar_breakout_strategy_v1.py for the current
+    total-count/full-roster tests."""
     from core.strategy.StrategyEngine import StrategyEngine
     engine = StrategyEngine()
-    assert len(engine.strategies) == 23
     assert "BalanceRangeVAHVALReactionStrategy" in engine.enabled
 
 

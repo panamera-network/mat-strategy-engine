@@ -430,6 +430,183 @@ def detect_snr_role_flip(candles: List[CandleSnapshot], snr_levels: List[SNRLeve
     return best[1] if best else no_evidence
 
 
+# Fix #7AA — an EVIDENCE/lookback search-cost bound only, NOT a MAT
+# trading rule: "more than 3 children are allowed" (LOCKED) has no upper
+# limit in MAT's own semantics. This constant exists purely so the
+# Mother-candidate widening below is a bounded, deterministic scan (and,
+# as a side effect, gives a hard ceiling on how far back a candidate
+# Mother can be from "now" -- see FIRST BREAKOUT IDENTITY in
+# detect_inside_bar_sequence()'s own docstring for why staleness is
+# actually prevented by the already-consumed-body check, not by this
+# cap). Reuses the SAME already-established SWING_LOOKBACK constant (20)
+# this whole file already uses elsewhere -- no new arbitrary number
+# invented -- but if MAT ever needs a longer evidence horizon for this
+# specific strategy, raising this constant is purely a search-cost
+# decision, never a rule change.
+MAX_INSIDE_BAR_CHILDREN = SWING_LOOKBACK
+
+
+def detect_inside_bar_sequence(candles: List[CandleSnapshot]) -> Dict:
+    """Fix #7AA — MAT Inside Bar v1: Mother Bar -> minimum 3 contained
+    child candles -> body breakout. Pure, deterministic, evidence-only
+    (no eligibility/scoring decisions live here -- the Strategy layer
+    only reads this dict's own confirmed/direction flags).
+
+    EVIDENCE AUDIT (before writing this function): StrategySnapshot.
+    recent_candles (Fix #7K, via label_recent_candles()) only ever
+    exposes the last 3 candles, and only direction/index/timestamp/
+    volume (core_models.CandleDirection) -- no open/high/low/close at
+    all, and nowhere near enough history for a Mother that can be up to
+    MAX_INSIDE_BAR_CHILDREN + 1 candles back. Insufficient for this
+    strategy's own geometry proof. This function closes that gap using
+    the SAME already-fetched `candles` window StructureEngine.get_
+    snapshot() already has (no new fetch) -- never reconstructing candle
+    geometry inside the Strategy itself.
+
+    CHILD-CLOSE SEMANTICS (MAT rule, corrected before this fix's first
+    commit -- the ORIGINAL v1 design checked wick containment against
+    the Mother's HIGH/LOW, which is not MAT's rule): a child is valid
+    purely by its OWN CLOSE relative to the Mother's BODY --
+    `mother_body_low <= child.close <= mother_body_high` (inclusive on
+    both boundaries; equality at the body open/close counts as still
+    inside, because the breakout check below is strict `>`/`<`, so there
+    is no gap or overlap between "child" and "breakout"). A child's wick
+    (high/low) may extend beyond the Mother's own high/low WITHOUT
+    invalidating it -- Mother H/L plays NO role in child eligibility at
+    all in this v1; it is retained in this function's returned evidence
+    purely as the Mother candle's own real geometry (for display), never
+    as a containment rule. Do not read `mother_high`/`mother_low` in the
+    returned evidence as "the child boundary" -- `mother_body_high`/
+    `mother_body_low` (derived from mother_open/mother_close) is the only
+    boundary that ever gates a child or a breakout.
+
+    SEQUENCE IDENTITY / STALE-MOTHER SELECTION RULE (reported before
+    commit, per this fix's own instruction): the breakout candle is
+    ALWAYS `candles[-1]` -- the current/most-recent candle, the same
+    "evaluate as of now" convention this whole strategy series already
+    established (Fix #7P/#7V/#7W/#7X/#7Y). Starting from
+    num_children=3 (the documented minimum) and increasing one at a
+    time up to MAX_INSIDE_BAR_CHILDREN, this tries the NEAREST possible
+    Mother first (`mother_index = breakout_index - 1 - num_children`) --
+    the smallest, most recent candidate -- and only widens to an
+    earlier, larger num_children (a DIFFERENT, earlier candidate Mother)
+    if the nearer one fails containment, was already consumed (see FIRST
+    BREAKOUT IDENTITY below), or fails the breakout check itself.
+
+    FIRST BREAKOUT IDENTITY (follow-up audit, still before this fix's
+    first commit): the breakout candle must be the FIRST candle whose
+    close breaks the Mother's body since that Mother's minimum child
+    sequence formed -- once ANY candle qualifies as a body-break, that
+    Mother's sequence is CONSUMED, and no LATER candle may be reported
+    as "the" breakout for the SAME Mother, even if that later candle
+    also closes outside the body. Under the corrected close-based child
+    rule above, "child" and "already-broke-the-body" are simply the two
+    complementary sides of the SAME close-vs-body check (inside-or-equal
+    vs strictly outside) -- there is no longer a separate wick-escape
+    concept to check at all: for every children-window candidate, EVERY
+    candle in that window must have its own close inside-or-equal to the
+    Mother's body; the instant one does not, that whole (Mother,
+    num_children) candidate is rejected outright (not retried with a
+    different span) -- there is no "resume the countdown" or "start a
+    fresh Mother from the consuming candle" behavior in this v1; a
+    consumed Mother simply yields no confirmed sequence at all for
+    `candles[-1]`, exactly as if the same evaluation had been run at the
+    instant that earlier candle had closed (this v1 has no persisted
+    state across calls -- each call independently re-derives the same
+    conclusion from the full window every time).
+
+    This guarantees an old Mother can never "hijack" an unrelated
+    breakout much later: (a) the search is bounded at
+    MAX_INSIDE_BAR_CHILDREN candles back (an EVIDENCE/lookback horizon
+    only -- see that constant's own comment; MAT has never locked a
+    maximum child count as trading semantics), and (b) the children
+    window always ends at breakout_index - 1 (never skips a candle), so
+    a single candle whose close already broke the body anywhere in that
+    fixed end-anchored window poisons EVERY widening attempt equally (a
+    wider window still contains that same candle) -- there is no way to
+    "skip past" a disqualifying child by trying a different Mother. The
+    first num_children value that fully validates (every child's close
+    inside-or-equal to the body, AND `candles[-1]` itself is a genuine,
+    strict body-break) is returned; nothing "more valid" is ever
+    silently preferred over it.
+
+    Mother H/L is DISPLAY-ONLY geometry in this v1 (the Mother candle's
+    own real high/low, still returned for a chart to draw the Mother
+    candle correctly) -- it is never the child-containment rule. Mother
+    O/C (via mother_body_high/mother_body_low) is the ONLY boundary that
+    gates both child validity and the breakout.
+
+    Returns confirmed/direction ("Bullish"/"Bearish") plus the Mother's
+    own index/timestamp/open/high/low/close, children_count, children_
+    start/end index/timestamp, and breakout index/timestamp/close -- all
+    None/False together when fewer than 5 candles are available (Mother
+    + 3 children + breakout, the absolute minimum) or no candidate
+    Mother/child-count combination validates."""
+    no_sequence = {
+        "confirmed": False, "direction": None,
+        "mother_index": None, "mother_timestamp": None,
+        "mother_open": None, "mother_high": None, "mother_low": None, "mother_close": None,
+        "children_count": None,
+        "children_start_index": None, "children_start_timestamp": None,
+        "children_end_index": None, "children_end_timestamp": None,
+        "breakout_index": None, "breakout_timestamp": None, "breakout_close": None,
+    }
+    if len(candles) < 5:
+        return no_sequence
+
+    breakout_index = len(candles) - 1
+    breakout = candles[breakout_index]
+
+    for num_children in range(3, MAX_INSIDE_BAR_CHILDREN + 1):
+        mother_index = breakout_index - 1 - num_children
+        if mother_index < 0:
+            break
+        mother = candles[mother_index]
+        children_start = mother_index + 1
+        children_end = breakout_index - 1
+        mother_body_high = max(mother.open, mother.close)
+        mother_body_low = min(mother.open, mother.close)
+
+        # MAT child rule: close-vs-body only -- wick/high/low is
+        # irrelevant to child eligibility (see this function's own
+        # CHILD-CLOSE SEMANTICS docstring section). A child whose close
+        # already sits outside the body (inclusive boundary) means this
+        # (Mother, num_children) candidate is invalid -- either that
+        # candle already consumed the Mother (FIRST BREAKOUT IDENTITY)
+        # or it was never a valid child in the first place; both cases
+        # widen to a different candidate the same way.
+        all_children_valid = all(
+            mother_body_low <= candles[i].close <= mother_body_high
+            for i in range(children_start, children_end + 1)
+        )
+        if not all_children_valid:
+            continue
+
+        if breakout.close > mother_body_high:
+            direction = "Bullish"
+        elif breakout.close < mother_body_low:
+            direction = "Bearish"
+        else:
+            continue
+
+        return {
+            "confirmed": True, "direction": direction,
+            "mother_index": mother_index, "mother_timestamp": str(mother.timestamp),
+            "mother_open": mother.open, "mother_high": mother.high,
+            "mother_low": mother.low, "mother_close": mother.close,
+            "children_count": num_children,
+            "children_start_index": children_start,
+            "children_start_timestamp": str(candles[children_start].timestamp),
+            "children_end_index": children_end,
+            "children_end_timestamp": str(candles[children_end].timestamp),
+            "breakout_index": breakout_index,
+            "breakout_timestamp": str(breakout.timestamp),
+            "breakout_close": breakout.close,
+        }
+
+    return no_sequence
+
+
 def detect_choch_then_bos(candles: List[CandleSnapshot], current_event: Dict, window: int = SWING_WINDOW) -> Dict:
     """Fix #7T — genuine prior-CHoCH-before-current-BOS sequence evidence.
 

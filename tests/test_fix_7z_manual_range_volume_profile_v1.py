@@ -335,12 +335,15 @@ def test_no_strategy_subclass_defined_here():
         assert not (issubclass(obj, Strategy) and obj is not Strategy)
 
 
-def test_strategy_engine_discovery_count_unchanged_by_this_fix():
-    """This fix adds ZERO new strategies -- the discovered count must
-    stay exactly what Fix #7Y left it at."""
+def test_manual_range_volume_profile_never_discovered_as_a_strategy():
+    """This fix adds ZERO new strategies. The exact discovery COUNT
+    assertion goes stale the moment a later fix adds a real strategy
+    (Fix #7AA adds InsideBarBreakoutStrategy) -- this checks only that
+    ManualRangeVolumeProfile itself was never discovered, not the total
+    count. See test_fix_7aa_inside_bar_breakout_strategy_v1.py for the
+    current total-count/full-roster tests."""
     from core.strategy.StrategyEngine import StrategyEngine
     engine = StrategyEngine()
-    assert len(engine.strategies) == 23
     assert "ManualRangeVolumeProfile" not in engine.enabled
 
 

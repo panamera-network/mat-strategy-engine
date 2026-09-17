@@ -193,6 +193,23 @@ def to_strategy_snapshot(structure: StructureSnapshot) -> StrategySnapshot:
         balance_range_value_area_pct=getattr(structure, "balance_range_value_area_pct", None),
         balance_range_num_bins=getattr(structure, "balance_range_num_bins", None),
         balance_range_source_type=getattr(structure, "balance_range_source_type", None),
+        # Fix #7AA — straight copy, no recomputation, no new fetch.
+        inside_bar_confirmed=getattr(structure, "inside_bar_confirmed", False),
+        inside_bar_direction=getattr(structure, "inside_bar_direction", None),
+        inside_bar_mother_index=getattr(structure, "inside_bar_mother_index", None),
+        inside_bar_mother_timestamp=getattr(structure, "inside_bar_mother_timestamp", None),
+        inside_bar_mother_open=getattr(structure, "inside_bar_mother_open", None),
+        inside_bar_mother_high=getattr(structure, "inside_bar_mother_high", None),
+        inside_bar_mother_low=getattr(structure, "inside_bar_mother_low", None),
+        inside_bar_mother_close=getattr(structure, "inside_bar_mother_close", None),
+        inside_bar_children_count=getattr(structure, "inside_bar_children_count", None),
+        inside_bar_children_start_index=getattr(structure, "inside_bar_children_start_index", None),
+        inside_bar_children_start_timestamp=getattr(structure, "inside_bar_children_start_timestamp", None),
+        inside_bar_children_end_index=getattr(structure, "inside_bar_children_end_index", None),
+        inside_bar_children_end_timestamp=getattr(structure, "inside_bar_children_end_timestamp", None),
+        inside_bar_breakout_index=getattr(structure, "inside_bar_breakout_index", None),
+        inside_bar_breakout_timestamp=getattr(structure, "inside_bar_breakout_timestamp", None),
+        inside_bar_breakout_close=getattr(structure, "inside_bar_breakout_close", None),
     )
 
 

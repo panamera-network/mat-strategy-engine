@@ -14,6 +14,7 @@ from core.structure_utils import (
     SWING_WINDOW,
     detect_breakout_retest,
     detect_choch_then_bos,
+    detect_inside_bar_sequence,
     detect_snr_role_flip,
     detect_structure_event,
     detect_trend,
@@ -374,6 +375,30 @@ class StructureEngine:
                 snapshot.balance_range_value_area_pct = balance_profile.value_area_pct
                 snapshot.balance_range_num_bins = balance_profile.num_bins
                 snapshot.balance_range_source_type = balance_profile.source_type
+
+        # Fix #7AA — MAT Inside Bar sequence evidence (Mother Bar -> >=3
+        # contained children -> body breakout), detected on THIS SAME
+        # already-fetched `candles` window (no new fetch -- see
+        # structure_utils.detect_inside_bar_sequence()'s own docstring
+        # for the full evidence audit, equality-semantics decision, and
+        # stale-Mother selection rule).
+        inside_bar = detect_inside_bar_sequence(candles)
+        snapshot.inside_bar_confirmed = inside_bar["confirmed"]
+        snapshot.inside_bar_direction = inside_bar["direction"]
+        snapshot.inside_bar_mother_index = inside_bar["mother_index"]
+        snapshot.inside_bar_mother_timestamp = inside_bar["mother_timestamp"]
+        snapshot.inside_bar_mother_open = inside_bar["mother_open"]
+        snapshot.inside_bar_mother_high = inside_bar["mother_high"]
+        snapshot.inside_bar_mother_low = inside_bar["mother_low"]
+        snapshot.inside_bar_mother_close = inside_bar["mother_close"]
+        snapshot.inside_bar_children_count = inside_bar["children_count"]
+        snapshot.inside_bar_children_start_index = inside_bar["children_start_index"]
+        snapshot.inside_bar_children_start_timestamp = inside_bar["children_start_timestamp"]
+        snapshot.inside_bar_children_end_index = inside_bar["children_end_index"]
+        snapshot.inside_bar_children_end_timestamp = inside_bar["children_end_timestamp"]
+        snapshot.inside_bar_breakout_index = inside_bar["breakout_index"]
+        snapshot.inside_bar_breakout_timestamp = inside_bar["breakout_timestamp"]
+        snapshot.inside_bar_breakout_close = inside_bar["breakout_close"]
 
         strength_diag = strength_engine.compute_strength(candles)
         snapshot.strength = strength_diag.strength

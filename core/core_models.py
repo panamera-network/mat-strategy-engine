@@ -564,6 +564,32 @@ class StructureSnapshot:
     balance_range_value_area_pct: float | None = None
     balance_range_num_bins: int | None = None
     balance_range_source_type: str | None = None
+    # Fix #7AA — MAT Inside Bar v1 sequence evidence (Mother Bar -> >=3
+    # contained children -> body breakout), computed by structure_utils.
+    # detect_inside_bar_sequence() over this same already-fetched
+    # `candles` window (no new fetch, no recomputation inside the
+    # Strategy layer -- see that function's own docstring for the full
+    # evidence audit, equality-semantics decision, and stale-Mother
+    # selection rule). inside_bar_direction is "Bullish"/"Bearish"
+    # (structure-layer vocabulary, same as structure_direction/choch_*
+    # above). All None/False together when no qualifying sequence is
+    # found ending at the current candle.
+    inside_bar_confirmed: bool = False
+    inside_bar_direction: str | None = None
+    inside_bar_mother_index: int | None = None
+    inside_bar_mother_timestamp: str | None = None
+    inside_bar_mother_open: float | None = None
+    inside_bar_mother_high: float | None = None
+    inside_bar_mother_low: float | None = None
+    inside_bar_mother_close: float | None = None
+    inside_bar_children_count: int | None = None
+    inside_bar_children_start_index: int | None = None
+    inside_bar_children_start_timestamp: str | None = None
+    inside_bar_children_end_index: int | None = None
+    inside_bar_children_end_timestamp: str | None = None
+    inside_bar_breakout_index: int | None = None
+    inside_bar_breakout_timestamp: str | None = None
+    inside_bar_breakout_close: float | None = None
 
     @property
     def body_dominance(self) -> float:

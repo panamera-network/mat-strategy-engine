@@ -259,6 +259,27 @@ class StrategySnapshot:
     balance_range_value_area_pct: Optional[float] = None
     balance_range_num_bins: Optional[int] = None
     balance_range_source_type: Optional[str] = None
+    # Fix #7AA — MAT Inside Bar v1 sequence evidence, straight copy from
+    # StructureSnapshot.inside_bar_* (itself computed by structure_utils.
+    # detect_inside_bar_sequence() -- see StructureSnapshot's own
+    # docstring for the full audit/wiring path). No new formula, no
+    # recomputation, no new fetch in this Strategy layer.
+    inside_bar_confirmed: bool = False
+    inside_bar_direction: Optional[str] = None
+    inside_bar_mother_index: Optional[int] = None
+    inside_bar_mother_timestamp: Optional[str] = None
+    inside_bar_mother_open: Optional[float] = None
+    inside_bar_mother_high: Optional[float] = None
+    inside_bar_mother_low: Optional[float] = None
+    inside_bar_mother_close: Optional[float] = None
+    inside_bar_children_count: Optional[int] = None
+    inside_bar_children_start_index: Optional[int] = None
+    inside_bar_children_start_timestamp: Optional[str] = None
+    inside_bar_children_end_index: Optional[int] = None
+    inside_bar_children_end_timestamp: Optional[str] = None
+    inside_bar_breakout_index: Optional[int] = None
+    inside_bar_breakout_timestamp: Optional[str] = None
+    inside_bar_breakout_close: Optional[float] = None
 
 def price_from_snapshot(snapshot: StrategySnapshot) -> Optional[float]:
     """A representative chart price for a signal — for placing a marker/zone
