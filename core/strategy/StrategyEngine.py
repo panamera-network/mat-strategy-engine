@@ -210,6 +210,27 @@ def to_strategy_snapshot(structure: StructureSnapshot) -> StrategySnapshot:
         inside_bar_breakout_index=getattr(structure, "inside_bar_breakout_index", None),
         inside_bar_breakout_timestamp=getattr(structure, "inside_bar_breakout_timestamp", None),
         inside_bar_breakout_close=getattr(structure, "inside_bar_breakout_close", None),
+        # Fix #7AB — straight copy, no recomputation, no new fetch.
+        three_inside_confirmed=getattr(structure, "three_inside_confirmed", False),
+        three_inside_direction=getattr(structure, "three_inside_direction", None),
+        three_inside_c1_index=getattr(structure, "three_inside_c1_index", None),
+        three_inside_c1_timestamp=getattr(structure, "three_inside_c1_timestamp", None),
+        three_inside_c1_open=getattr(structure, "three_inside_c1_open", None),
+        three_inside_c1_high=getattr(structure, "three_inside_c1_high", None),
+        three_inside_c1_low=getattr(structure, "three_inside_c1_low", None),
+        three_inside_c1_close=getattr(structure, "three_inside_c1_close", None),
+        three_inside_c2_index=getattr(structure, "three_inside_c2_index", None),
+        three_inside_c2_timestamp=getattr(structure, "three_inside_c2_timestamp", None),
+        three_inside_c2_open=getattr(structure, "three_inside_c2_open", None),
+        three_inside_c2_high=getattr(structure, "three_inside_c2_high", None),
+        three_inside_c2_low=getattr(structure, "three_inside_c2_low", None),
+        three_inside_c2_close=getattr(structure, "three_inside_c2_close", None),
+        three_inside_c3_index=getattr(structure, "three_inside_c3_index", None),
+        three_inside_c3_timestamp=getattr(structure, "three_inside_c3_timestamp", None),
+        three_inside_c3_open=getattr(structure, "three_inside_c3_open", None),
+        three_inside_c3_high=getattr(structure, "three_inside_c3_high", None),
+        three_inside_c3_low=getattr(structure, "three_inside_c3_low", None),
+        three_inside_c3_close=getattr(structure, "three_inside_c3_close", None),
     )
 
 

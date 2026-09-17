@@ -280,6 +280,32 @@ class StrategySnapshot:
     inside_bar_breakout_index: Optional[int] = None
     inside_bar_breakout_timestamp: Optional[str] = None
     inside_bar_breakout_close: Optional[float] = None
+    # Fix #7AB — MAT Three Inside Up/Down v1 sequence evidence, straight
+    # copy from StructureSnapshot.three_inside_* (itself computed by
+    # structure_utils.detect_three_inside_sequence() -- see
+    # StructureSnapshot's own docstring for the full audit/wiring path).
+    # No new formula, no recomputation, no new fetch in this Strategy
+    # layer.
+    three_inside_confirmed: bool = False
+    three_inside_direction: Optional[str] = None
+    three_inside_c1_index: Optional[int] = None
+    three_inside_c1_timestamp: Optional[str] = None
+    three_inside_c1_open: Optional[float] = None
+    three_inside_c1_high: Optional[float] = None
+    three_inside_c1_low: Optional[float] = None
+    three_inside_c1_close: Optional[float] = None
+    three_inside_c2_index: Optional[int] = None
+    three_inside_c2_timestamp: Optional[str] = None
+    three_inside_c2_open: Optional[float] = None
+    three_inside_c2_high: Optional[float] = None
+    three_inside_c2_low: Optional[float] = None
+    three_inside_c2_close: Optional[float] = None
+    three_inside_c3_index: Optional[int] = None
+    three_inside_c3_timestamp: Optional[str] = None
+    three_inside_c3_open: Optional[float] = None
+    three_inside_c3_high: Optional[float] = None
+    three_inside_c3_low: Optional[float] = None
+    three_inside_c3_close: Optional[float] = None
 
 def price_from_snapshot(snapshot: StrategySnapshot) -> Optional[float]:
     """A representative chart price for a signal — for placing a marker/zone

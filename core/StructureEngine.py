@@ -17,6 +17,7 @@ from core.structure_utils import (
     detect_inside_bar_sequence,
     detect_snr_role_flip,
     detect_structure_event,
+    detect_three_inside_sequence,
     detect_trend,
     derive_snr_levels,
     find_swings,
@@ -399,6 +400,34 @@ class StructureEngine:
         snapshot.inside_bar_breakout_index = inside_bar["breakout_index"]
         snapshot.inside_bar_breakout_timestamp = inside_bar["breakout_timestamp"]
         snapshot.inside_bar_breakout_close = inside_bar["breakout_close"]
+
+        # Fix #7AB — MAT Three Inside Up/Down sequence evidence (fixed
+        # exactly-3-candle pattern: C1 -> C2 body-in-body containment ->
+        # C3 confirmation), detected on THIS SAME already-fetched
+        # `candles` window (no new fetch -- see structure_utils.detect_
+        # three_inside_sequence()'s own docstring for the full audit and
+        # locked-rule detail).
+        three_inside = detect_three_inside_sequence(candles)
+        snapshot.three_inside_confirmed = three_inside["confirmed"]
+        snapshot.three_inside_direction = three_inside["direction"]
+        snapshot.three_inside_c1_index = three_inside["c1_index"]
+        snapshot.three_inside_c1_timestamp = three_inside["c1_timestamp"]
+        snapshot.three_inside_c1_open = three_inside["c1_open"]
+        snapshot.three_inside_c1_high = three_inside["c1_high"]
+        snapshot.three_inside_c1_low = three_inside["c1_low"]
+        snapshot.three_inside_c1_close = three_inside["c1_close"]
+        snapshot.three_inside_c2_index = three_inside["c2_index"]
+        snapshot.three_inside_c2_timestamp = three_inside["c2_timestamp"]
+        snapshot.three_inside_c2_open = three_inside["c2_open"]
+        snapshot.three_inside_c2_high = three_inside["c2_high"]
+        snapshot.three_inside_c2_low = three_inside["c2_low"]
+        snapshot.three_inside_c2_close = three_inside["c2_close"]
+        snapshot.three_inside_c3_index = three_inside["c3_index"]
+        snapshot.three_inside_c3_timestamp = three_inside["c3_timestamp"]
+        snapshot.three_inside_c3_open = three_inside["c3_open"]
+        snapshot.three_inside_c3_high = three_inside["c3_high"]
+        snapshot.three_inside_c3_low = three_inside["c3_low"]
+        snapshot.three_inside_c3_close = three_inside["c3_close"]
 
         strength_diag = strength_engine.compute_strength(candles)
         snapshot.strength = strength_diag.strength

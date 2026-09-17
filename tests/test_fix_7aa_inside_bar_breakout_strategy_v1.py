@@ -678,10 +678,14 @@ def test_detector_never_calls_structure_or_zone_detection():
 # Discovery.
 # ---------------------------------------------------------------------------
 
-def test_strategy_engine_discovers_twentyfour_strategies_now():
+def test_inside_bar_breakout_strategy_present_in_engine():
+    """Fix #7AA's own discovery-count test goes stale the moment a later
+    fix adds another strategy (Fix #7AB bumps 24 -> 25) -- this checks
+    only that THIS fix's own strategy is present, not the total count.
+    See test_fix_7ab_three_inside_strategy_v1.py for the current
+    total-count/full-roster tests."""
     from core.strategy.StrategyEngine import StrategyEngine
     engine = StrategyEngine()
-    assert len(engine.strategies) == 24
     assert "InsideBarBreakoutStrategy" in engine.enabled
 
 

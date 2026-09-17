@@ -607,6 +607,131 @@ def detect_inside_bar_sequence(candles: List[CandleSnapshot]) -> Dict:
     return no_sequence
 
 
+def detect_three_inside_sequence(candles: List[CandleSnapshot]) -> Dict:
+    """Fix #7AB — MAT Three Inside Up / Three Inside Down v1: a fixed,
+    exactly-3-candle pattern (Candle1 -> Candle2 "Harami" containment ->
+    Candle3 confirmation), per MAT's own locked rules (Fix #7AB's own
+    rule-audit report, confirmed before this implementation). Pure,
+    deterministic, evidence-only -- no eligibility/scoring decisions live
+    here.
+
+    EVIDENCE AUDIT (before writing this function -- see Fix #7AB's own
+    audit report for the full detail): StrategySnapshot.recent_candles
+    (Fix #7K) only exposes direction/index/timestamp/volume, no OHLC at
+    all -- insufficient for the body/close comparisons this pattern
+    needs. Closed using the SAME already-fetched `candles` window
+    StructureEngine.get_snapshot() already has -- no new fetch, no
+    OHLC ever reconstructed inside the Strategy layer. Unlike Fix #7AA's
+    Inside Bar (a variable-length Mother + >=3 children + breakout
+    search), this pattern is ALWAYS exactly 3 candles -- there is no
+    widening search at all: Candle3 is always `candles[-1]` (the current
+    candle, the same "evaluate as of now" convention already established
+    by Fix #7P/#7V/#7W/#7X/#7Y/#7AA), Candle2 is always `candles[-2]`,
+    Candle1 is always `candles[-3]`. Because the three positions are
+    always fixed, stale-identity concerns (Fix #7AA's own "old Mother
+    hijacking a later breakout" problem) cannot arise here structurally
+    -- there is nothing to widen or reuse.
+
+    LOCKED MAT RULES (this fix's own rule-audit report, confirmed before
+    implementation):
+      Three Inside Up:   C1 bearish, C2 bullish, C3 bullish, C3.close
+                          strictly > C1.open.
+      Three Inside Down: C1 bullish, C2 bearish, C3 bearish, C3.close
+                          strictly < C1.open.
+      C2's BODY must be fully contained within C1's BODY, INCLUSIVE
+      boundaries: `min(c1.open, c1.close) <= min(c2.open, c2.close)`
+      AND `max(c2.open, c2.close) <= max(c1.open, c1.close)`. C2's WICK
+      (high/low) is UNRESTRICTED -- it may extend beyond C1's high/low
+      without invalidating the pattern (mirrors Fix #7AA's own final
+      wick-doesn't-matter conclusion for internal consistency, and
+      matches the common textbook Harami definition, which is body-only).
+      C3's confirmation boundary is Candle 1's OPEN specifically (not
+      Candle 1's body high/low as a pair, and not Candle 1's high/low
+      wick) -- a STRICT `>`/`<` comparison, never inclusive: closing
+      EXACTLY at C1.open does NOT confirm (this is the opposite
+      convention from C2's containment check, which IS inclusive --
+      the two boundaries are deliberately different per this fix's own
+      locked rules, not a copy-paste of Fix #7AA's convention).
+
+    DOJI REJECTION: every one of C1/C2/C3 requires a real, non-zero
+    directional color (a candle "requires directional color" here means
+    literally all three positions, since C1/C2 are classified strictly
+    bearish/bullish and C3 must be the confirmation's own color) -- a
+    doji (`candle.close == candle.open`, no direction at all) at ANY of
+    the three positions rejects the whole sequence outright, before any
+    other check runs.
+
+    NO CONTEXT GATES (LOCKED): no prior-trend eligibility requirement
+    (textbook definitions often want this pattern to appear "after a
+    downtrend/uptrend"; MAT explicitly does not gate on it here, matching
+    the same minimal-v1 philosophy already established for every
+    strategy since Fix #7V), no gap requirement (MT5/FX price is
+    continuous tick-by-tick, not the gap-prone daily-equity context most
+    textbook Harami/Three-Inside descriptions originate from), and no
+    Candle-1 size/ATR-significance threshold (any bearish/bullish C1
+    qualifies regardless of its own range, however small) -- none of
+    these are computed by this function at all, so a Strategy consuming
+    this evidence has no way to accidentally reintroduce them either.
+
+    Returns confirmed/direction ("Bullish"/"Bearish") plus each of C1/
+    C2/C3's own index/timestamp/open/high/low/close -- all None/False
+    together when fewer than 3 candles are available or the fixed
+    3-candle window ending at `candles[-1]` does not satisfy every
+    locked rule above."""
+    no_sequence = {
+        "confirmed": False, "direction": None,
+        "c1_index": None, "c1_timestamp": None,
+        "c1_open": None, "c1_high": None, "c1_low": None, "c1_close": None,
+        "c2_index": None, "c2_timestamp": None,
+        "c2_open": None, "c2_high": None, "c2_low": None, "c2_close": None,
+        "c3_index": None, "c3_timestamp": None,
+        "c3_open": None, "c3_high": None, "c3_low": None, "c3_close": None,
+    }
+    if len(candles) < 3:
+        return no_sequence
+
+    c1_index = len(candles) - 3
+    c2_index = len(candles) - 2
+    c3_index = len(candles) - 1
+    c1, c2, c3 = candles[c1_index], candles[c2_index], candles[c3_index]
+
+    # Doji rejection -- before any other check, per this fix's own
+    # locked rule: every one of the three positions requires a real
+    # directional color.
+    if c1.close == c1.open or c2.close == c2.open or c3.close == c3.open:
+        return no_sequence
+
+    c1_body_high = max(c1.open, c1.close)
+    c1_body_low = min(c1.open, c1.close)
+    c2_body_high = max(c2.open, c2.close)
+    c2_body_low = min(c2.open, c2.close)
+
+    # C2 body-in-body containment -- inclusive boundaries, wick ignored.
+    if not (c2_body_low >= c1_body_low and c2_body_high <= c1_body_high):
+        return no_sequence
+
+    c1_bearish, c1_bullish = c1.close < c1.open, c1.close > c1.open
+    c2_bullish, c2_bearish = c2.close > c2.open, c2.close < c2.open
+    c3_bullish, c3_bearish = c3.close > c3.open, c3.close < c3.open
+
+    if c1_bearish and c2_bullish and c3_bullish and c3.close > c1.open:
+        direction = "Bullish"
+    elif c1_bullish and c2_bearish and c3_bearish and c3.close < c1.open:
+        direction = "Bearish"
+    else:
+        return no_sequence
+
+    return {
+        "confirmed": True, "direction": direction,
+        "c1_index": c1_index, "c1_timestamp": str(c1.timestamp),
+        "c1_open": c1.open, "c1_high": c1.high, "c1_low": c1.low, "c1_close": c1.close,
+        "c2_index": c2_index, "c2_timestamp": str(c2.timestamp),
+        "c2_open": c2.open, "c2_high": c2.high, "c2_low": c2.low, "c2_close": c2.close,
+        "c3_index": c3_index, "c3_timestamp": str(c3.timestamp),
+        "c3_open": c3.open, "c3_high": c3.high, "c3_low": c3.low, "c3_close": c3.close,
+    }
+
+
 def detect_choch_then_bos(candles: List[CandleSnapshot], current_event: Dict, window: int = SWING_WINDOW) -> Dict:
     """Fix #7T — genuine prior-CHoCH-before-current-BOS sequence evidence.
 
