@@ -7,6 +7,7 @@ from core.demand_engine import DemandEngine, compute_atr, derive_freshness_state
 from core.FVGEngine import detect_fvg
 from core.MomentumEngine import MomentumEngine
 from core.OrderBlockEngine import detect_order_blocks
+from core.PO3Engine import detect_po3_sequence
 from core.StrengthEngine import StrengthEngine
 from core.core_models import PriceSnapshot, StructureSnapshot
 from core.structure_utils import (
@@ -458,6 +459,49 @@ class StructureEngine:
         snapshot.three_soldiers_crows_c3_high = three_soldiers_crows["c3_high"]
         snapshot.three_soldiers_crows_c3_low = three_soldiers_crows["c3_low"]
         snapshot.three_soldiers_crows_c3_close = three_soldiers_crows["c3_close"]
+
+        # Fix #7AD — MAT PO3 (Power of Three) lifecycle evidence: Balance
+        # candidate -> Manipulation -> Reclaim -> Distribution
+        # Confirmation, replayed over THIS SAME already-fetched `candles`
+        # window (no new fetch -- see core.PO3Engine.detect_po3_sequence()'s
+        # own docstring for the full audit and locked-rule detail). Passed
+        # the FULL `candles` (not candles[:-1]) deliberately: PO3's own
+        # replay algorithm already freezes each candidate range using only
+        # data available before it, and only tests manipulation/reclaim/
+        # distribution on candles strictly after that range's own
+        # end_index -- so the current candle CAN legitimately be the
+        # Distribution confirmation event itself, which is the entire
+        # point of exposing it (see this fix's own "Strategy may fire
+        # only when the current/latest candle is the Distribution
+        # confirmation event" requirement).
+        po3 = detect_po3_sequence(candles)
+        snapshot.po3_stage = po3["stage"]
+        snapshot.po3_hypothesis_direction = po3["hypothesis_direction"]
+        snapshot.po3_direction = po3["direction"]
+        snapshot.po3_range_start_index = po3["range_start_index"]
+        snapshot.po3_range_start_timestamp = po3["range_start_timestamp"]
+        snapshot.po3_range_end_index = po3["range_end_index"]
+        snapshot.po3_range_end_timestamp = po3["range_end_timestamp"]
+        snapshot.po3_range_high = po3["range_high"]
+        snapshot.po3_range_low = po3["range_low"]
+        snapshot.po3_manipulation_index = po3["manipulation_index"]
+        snapshot.po3_manipulation_timestamp = po3["manipulation_timestamp"]
+        snapshot.po3_manipulation_open = po3["manipulation_open"]
+        snapshot.po3_manipulation_high = po3["manipulation_high"]
+        snapshot.po3_manipulation_low = po3["manipulation_low"]
+        snapshot.po3_manipulation_close = po3["manipulation_close"]
+        snapshot.po3_reclaim_index = po3["reclaim_index"]
+        snapshot.po3_reclaim_timestamp = po3["reclaim_timestamp"]
+        snapshot.po3_reclaim_open = po3["reclaim_open"]
+        snapshot.po3_reclaim_high = po3["reclaim_high"]
+        snapshot.po3_reclaim_low = po3["reclaim_low"]
+        snapshot.po3_reclaim_close = po3["reclaim_close"]
+        snapshot.po3_distribution_index = po3["distribution_index"]
+        snapshot.po3_distribution_timestamp = po3["distribution_timestamp"]
+        snapshot.po3_distribution_open = po3["distribution_open"]
+        snapshot.po3_distribution_high = po3["distribution_high"]
+        snapshot.po3_distribution_low = po3["distribution_low"]
+        snapshot.po3_distribution_close = po3["distribution_close"]
 
         strength_diag = strength_engine.compute_strength(candles)
         snapshot.strength = strength_diag.strength

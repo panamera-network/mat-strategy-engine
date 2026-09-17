@@ -332,6 +332,40 @@ class StrategySnapshot:
     three_soldiers_crows_c3_high: Optional[float] = None
     three_soldiers_crows_c3_low: Optional[float] = None
     three_soldiers_crows_c3_close: Optional[float] = None
+    # Fix #7AD — MAT PO3 (Power of Three) v1 lifecycle evidence, straight
+    # copy from StructureSnapshot.po3_* (itself computed by core.PO3Engine.
+    # detect_po3_sequence() -- see StructureSnapshot's own docstring for
+    # the full audit/wiring path). No new formula, no recomputation, no
+    # new fetch in this Strategy layer. po3_distribution_index may point
+    # at an earlier candle -- a Strategy must independently check
+    # freshness before firing (see PO3Engine's own docstring).
+    po3_stage: str = "none"
+    po3_hypothesis_direction: Optional[str] = None
+    po3_direction: Optional[str] = None
+    po3_range_start_index: Optional[int] = None
+    po3_range_start_timestamp: Optional[str] = None
+    po3_range_end_index: Optional[int] = None
+    po3_range_end_timestamp: Optional[str] = None
+    po3_range_high: Optional[float] = None
+    po3_range_low: Optional[float] = None
+    po3_manipulation_index: Optional[int] = None
+    po3_manipulation_timestamp: Optional[str] = None
+    po3_manipulation_open: Optional[float] = None
+    po3_manipulation_high: Optional[float] = None
+    po3_manipulation_low: Optional[float] = None
+    po3_manipulation_close: Optional[float] = None
+    po3_reclaim_index: Optional[int] = None
+    po3_reclaim_timestamp: Optional[str] = None
+    po3_reclaim_open: Optional[float] = None
+    po3_reclaim_high: Optional[float] = None
+    po3_reclaim_low: Optional[float] = None
+    po3_reclaim_close: Optional[float] = None
+    po3_distribution_index: Optional[int] = None
+    po3_distribution_timestamp: Optional[str] = None
+    po3_distribution_open: Optional[float] = None
+    po3_distribution_high: Optional[float] = None
+    po3_distribution_low: Optional[float] = None
+    po3_distribution_close: Optional[float] = None
 
 def price_from_snapshot(snapshot: StrategySnapshot) -> Optional[float]:
     """A representative chart price for a signal — for placing a marker/zone

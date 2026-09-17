@@ -558,10 +558,14 @@ def test_no_prior_trend_gap_wick_or_atr_size_check():
 # Discovery.
 # ---------------------------------------------------------------------------
 
-def test_strategy_engine_discovers_twentysix_strategies_now():
+def test_three_soldiers_crows_strategy_present_in_engine():
+    """This fix's own discovery-count test goes stale the moment a later
+    fix adds another strategy (Fix #7AD bumps 26 -> 27) -- this checks
+    only that THIS fix's own strategy is present, not the total count.
+    See test_fix_7ad_po3_strategy_v1.py for the current total-count/
+    full-roster tests."""
     from core.strategy.StrategyEngine import StrategyEngine
     engine = StrategyEngine()
-    assert len(engine.strategies) == 26
     assert "ThreeSoldiersCrowsStrategy" in engine.enabled
 
 

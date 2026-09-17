@@ -656,6 +656,53 @@ class StructureSnapshot:
     three_soldiers_crows_c3_high: float | None = None
     three_soldiers_crows_c3_low: float | None = None
     three_soldiers_crows_c3_close: float | None = None
+    # Fix #7AD — MAT PO3 (Power of Three) v1 lifecycle evidence: Balance
+    # candidate -> Manipulation -> Reclaim -> Distribution Confirmation,
+    # computed by core.PO3Engine.detect_po3_sequence() -- see that
+    # module's own docstring for the full audit, locked rules, and
+    # lifecycle/stale-identity handling. PO3 consumes the SAME canonical
+    # core.BalanceRangeEngine.detect_balance_range() calculation (replayed
+    # across already-fetched historical prefixes) -- no second balance/
+    # accumulation detector, no PO3-specific range geometry, no new MT5
+    # fetch. po3_stage is one of "none"/"candidate"/"manipulation"/
+    # "reclaimed"/"confirmed"/"failed". po3_hypothesis_direction is set
+    # once Manipulation begins (a HYPOTHESIS, not a confirmed fact);
+    # po3_direction is populated ONLY when po3_stage == "confirmed" (per
+    # this fix's own locked rule: MAT must not call direction confirmed
+    # prematurely). po3_distribution_index may point at any earlier
+    # candle, not necessarily the current one -- a Strategy consuming
+    # this evidence must independently check freshness (distribution_
+    # index == the current last candle's index) before firing, per this
+    # fix's own instruction. All manipulation_*/reclaim_*/distribution_*
+    # fields are None/False together until each stage is genuinely
+    # reached.
+    po3_stage: str = "none"
+    po3_hypothesis_direction: str | None = None
+    po3_direction: str | None = None
+    po3_range_start_index: int | None = None
+    po3_range_start_timestamp: str | None = None
+    po3_range_end_index: int | None = None
+    po3_range_end_timestamp: str | None = None
+    po3_range_high: float | None = None
+    po3_range_low: float | None = None
+    po3_manipulation_index: int | None = None
+    po3_manipulation_timestamp: str | None = None
+    po3_manipulation_open: float | None = None
+    po3_manipulation_high: float | None = None
+    po3_manipulation_low: float | None = None
+    po3_manipulation_close: float | None = None
+    po3_reclaim_index: int | None = None
+    po3_reclaim_timestamp: str | None = None
+    po3_reclaim_open: float | None = None
+    po3_reclaim_high: float | None = None
+    po3_reclaim_low: float | None = None
+    po3_reclaim_close: float | None = None
+    po3_distribution_index: int | None = None
+    po3_distribution_timestamp: str | None = None
+    po3_distribution_open: float | None = None
+    po3_distribution_high: float | None = None
+    po3_distribution_low: float | None = None
+    po3_distribution_close: float | None = None
 
     @property
     def body_dominance(self) -> float:
