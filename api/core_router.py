@@ -6,6 +6,7 @@ from typing import List, Optional
 from core.BiasEngine import BiasEngine
 from core.candle_cache import CandleCache
 from core.CandleEngine import CandleEngine
+from core.ManualRangeVolumeProfile import build_manual_range_marking, build_manual_range_profile
 from core.MomentumEngine import MomentumEngine
 
 from core.Output.Output import build_multi_symbol_output
@@ -77,6 +78,68 @@ def get_symbol_history(symbol: str, timeframe: str, count: int = 200):
             for c in candles
         ],
     }
+
+
+class ManualRangeVolumeProfileRequest(BaseModel):
+    symbol: str
+    timeframe: str
+    # Fix #7Z (stable Manual Range identity follow-up) — timestamps are
+    # the CANONICAL, preferred identity: they identify the exact candles
+    # selected and remain stable when new candles arrive. Prefer these.
+    start_timestamp: Optional[int] = None
+    end_timestamp: Optional[int] = None
+    # start_index/end_index are accepted ONLY alongside
+    # reference_end_timestamp (a stable anchor) -- a naked index pair is
+    # rejected by build_manual_range_profile() itself, because its
+    # meaning would silently drift as new candles close (this fix's own
+    # audit finding/fix). See core/ManualRangeVolumeProfile.py's own
+    # module docstring for the full live-verified stability proof.
+    start_index: Optional[int] = None
+    end_index: Optional[int] = None
+    reference_end_timestamp: Optional[int] = None
+
+
+@router.post("/volume-profile/manual")
+def get_manual_range_volume_profile(body: ManualRangeVolumeProfileRequest):
+    """Fix #7Z — Manual Range Volume Profile: an explicit, user-triggered
+    analysis operation, never evaluated on a market cycle and never
+    auto-discovered by StrategyEngine (see core/ManualRangeVolumeProfile.py's
+    own module docstring for the full architecture audit). No profile
+    exists until this endpoint is called with a real user-selected range.
+
+    PREFER (start_timestamp, end_timestamp) -- raw epoch seconds in this
+    account's own broker-server-time reference, the same values already
+    returned by each candle's own `time` field from
+    GET /core/history/{symbol}/{timeframe}, so a UI that already rendered
+    a chart via that endpoint can pass its own candle timestamps straight
+    through here without any conversion. These identify the exact
+    candles selected and remain stable forever, including across newly
+    closed candles.
+
+    (start_index, end_index) is also accepted, but ONLY together with
+    `reference_end_timestamp` (the stable anchor those indices are
+    relative to, e.g. the same /core/history response's own latest
+    candle timestamp) -- a naked index pair with no anchor is rejected
+    with confirmed=False, since its meaning would otherwise silently
+    drift as new candles close.
+
+    Returns confirmed=False with a human-readable `error` for an invalid
+    range (start > end, empty range, unresolvable symbol/timeframe, or a
+    naked index request) instead of raising -- a 200 response either
+    way, since this is a routine "no data for that selection" outcome,
+    not a server error."""
+    result = build_manual_range_profile(
+        candle_engine,
+        body.symbol,
+        body.timeframe,
+        start_timestamp=body.start_timestamp,
+        end_timestamp=body.end_timestamp,
+        start_index=body.start_index,
+        end_index=body.end_index,
+        reference_end_timestamp=body.reference_end_timestamp,
+    )
+    marking = build_manual_range_marking(result)
+    return {**result, "chart_marking": marking}
 
 
 @router.get("/diagnostics/bias")
