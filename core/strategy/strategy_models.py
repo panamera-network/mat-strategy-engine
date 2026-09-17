@@ -306,6 +306,32 @@ class StrategySnapshot:
     three_inside_c3_high: Optional[float] = None
     three_inside_c3_low: Optional[float] = None
     three_inside_c3_close: Optional[float] = None
+    # Fix #7AC — MAT Three White Soldiers / Three Black Crows v1
+    # sequence evidence, straight copy from StructureSnapshot.
+    # three_soldiers_crows_* (itself computed by structure_utils.
+    # detect_three_soldiers_crows_sequence() -- see StructureSnapshot's
+    # own docstring for the full audit/wiring path). No new formula, no
+    # recomputation, no new fetch in this Strategy layer.
+    three_soldiers_crows_confirmed: bool = False
+    three_soldiers_crows_direction: Optional[str] = None
+    three_soldiers_crows_c1_index: Optional[int] = None
+    three_soldiers_crows_c1_timestamp: Optional[str] = None
+    three_soldiers_crows_c1_open: Optional[float] = None
+    three_soldiers_crows_c1_high: Optional[float] = None
+    three_soldiers_crows_c1_low: Optional[float] = None
+    three_soldiers_crows_c1_close: Optional[float] = None
+    three_soldiers_crows_c2_index: Optional[int] = None
+    three_soldiers_crows_c2_timestamp: Optional[str] = None
+    three_soldiers_crows_c2_open: Optional[float] = None
+    three_soldiers_crows_c2_high: Optional[float] = None
+    three_soldiers_crows_c2_low: Optional[float] = None
+    three_soldiers_crows_c2_close: Optional[float] = None
+    three_soldiers_crows_c3_index: Optional[int] = None
+    three_soldiers_crows_c3_timestamp: Optional[str] = None
+    three_soldiers_crows_c3_open: Optional[float] = None
+    three_soldiers_crows_c3_high: Optional[float] = None
+    three_soldiers_crows_c3_low: Optional[float] = None
+    three_soldiers_crows_c3_close: Optional[float] = None
 
 def price_from_snapshot(snapshot: StrategySnapshot) -> Optional[float]:
     """A representative chart price for a signal — for placing a marker/zone

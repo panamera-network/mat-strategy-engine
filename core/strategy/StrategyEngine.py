@@ -231,6 +231,27 @@ def to_strategy_snapshot(structure: StructureSnapshot) -> StrategySnapshot:
         three_inside_c3_high=getattr(structure, "three_inside_c3_high", None),
         three_inside_c3_low=getattr(structure, "three_inside_c3_low", None),
         three_inside_c3_close=getattr(structure, "three_inside_c3_close", None),
+        # Fix #7AC — straight copy, no recomputation, no new fetch.
+        three_soldiers_crows_confirmed=getattr(structure, "three_soldiers_crows_confirmed", False),
+        three_soldiers_crows_direction=getattr(structure, "three_soldiers_crows_direction", None),
+        three_soldiers_crows_c1_index=getattr(structure, "three_soldiers_crows_c1_index", None),
+        three_soldiers_crows_c1_timestamp=getattr(structure, "three_soldiers_crows_c1_timestamp", None),
+        three_soldiers_crows_c1_open=getattr(structure, "three_soldiers_crows_c1_open", None),
+        three_soldiers_crows_c1_high=getattr(structure, "three_soldiers_crows_c1_high", None),
+        three_soldiers_crows_c1_low=getattr(structure, "three_soldiers_crows_c1_low", None),
+        three_soldiers_crows_c1_close=getattr(structure, "three_soldiers_crows_c1_close", None),
+        three_soldiers_crows_c2_index=getattr(structure, "three_soldiers_crows_c2_index", None),
+        three_soldiers_crows_c2_timestamp=getattr(structure, "three_soldiers_crows_c2_timestamp", None),
+        three_soldiers_crows_c2_open=getattr(structure, "three_soldiers_crows_c2_open", None),
+        three_soldiers_crows_c2_high=getattr(structure, "three_soldiers_crows_c2_high", None),
+        three_soldiers_crows_c2_low=getattr(structure, "three_soldiers_crows_c2_low", None),
+        three_soldiers_crows_c2_close=getattr(structure, "three_soldiers_crows_c2_close", None),
+        three_soldiers_crows_c3_index=getattr(structure, "three_soldiers_crows_c3_index", None),
+        three_soldiers_crows_c3_timestamp=getattr(structure, "three_soldiers_crows_c3_timestamp", None),
+        three_soldiers_crows_c3_open=getattr(structure, "three_soldiers_crows_c3_open", None),
+        three_soldiers_crows_c3_high=getattr(structure, "three_soldiers_crows_c3_high", None),
+        three_soldiers_crows_c3_low=getattr(structure, "three_soldiers_crows_c3_low", None),
+        three_soldiers_crows_c3_close=getattr(structure, "three_soldiers_crows_c3_close", None),
     )
 
 

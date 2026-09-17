@@ -622,6 +622,40 @@ class StructureSnapshot:
     three_inside_c3_high: float | None = None
     three_inside_c3_low: float | None = None
     three_inside_c3_close: float | None = None
+    # Fix #7AC — MAT Three White Soldiers / Three Black Crows v1 sequence
+    # evidence (a fixed exactly-3-candle pattern: three same-color
+    # candles with progressively-extending closes, each opening inside
+    # the prior candle's real body), computed by structure_utils.detect_
+    # three_soldiers_crows_sequence() over this same already-fetched
+    # `candles` window (no new fetch, no OHLC ever reconstructed in the
+    # Strategy layer -- see that function's own docstring for the full
+    # audit/locked-rule detail). three_soldiers_crows_direction is
+    # "Bullish"/"Bearish" (structure-layer vocabulary, same as
+    # structure_direction/choch_*/inside_bar_direction/three_inside_
+    # direction above). All None/False together when the fixed 3-candle
+    # window ending at the current candle does not satisfy every locked
+    # rule (doji at any position, wrong colors, an open outside the
+    # prior body, or a non-progressive close).
+    three_soldiers_crows_confirmed: bool = False
+    three_soldiers_crows_direction: str | None = None
+    three_soldiers_crows_c1_index: int | None = None
+    three_soldiers_crows_c1_timestamp: str | None = None
+    three_soldiers_crows_c1_open: float | None = None
+    three_soldiers_crows_c1_high: float | None = None
+    three_soldiers_crows_c1_low: float | None = None
+    three_soldiers_crows_c1_close: float | None = None
+    three_soldiers_crows_c2_index: int | None = None
+    three_soldiers_crows_c2_timestamp: str | None = None
+    three_soldiers_crows_c2_open: float | None = None
+    three_soldiers_crows_c2_high: float | None = None
+    three_soldiers_crows_c2_low: float | None = None
+    three_soldiers_crows_c2_close: float | None = None
+    three_soldiers_crows_c3_index: int | None = None
+    three_soldiers_crows_c3_timestamp: str | None = None
+    three_soldiers_crows_c3_open: float | None = None
+    three_soldiers_crows_c3_high: float | None = None
+    three_soldiers_crows_c3_low: float | None = None
+    three_soldiers_crows_c3_close: float | None = None
 
     @property
     def body_dominance(self) -> float:

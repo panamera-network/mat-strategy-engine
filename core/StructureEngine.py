@@ -18,6 +18,7 @@ from core.structure_utils import (
     detect_snr_role_flip,
     detect_structure_event,
     detect_three_inside_sequence,
+    detect_three_soldiers_crows_sequence,
     detect_trend,
     derive_snr_levels,
     find_swings,
@@ -428,6 +429,35 @@ class StructureEngine:
         snapshot.three_inside_c3_high = three_inside["c3_high"]
         snapshot.three_inside_c3_low = three_inside["c3_low"]
         snapshot.three_inside_c3_close = three_inside["c3_close"]
+
+        # Fix #7AC — MAT Three White Soldiers / Three Black Crows
+        # sequence evidence (fixed exactly-3-candle pattern: three
+        # same-color candles with progressively-extending closes, each
+        # opening inside the prior candle's real body), detected on THIS
+        # SAME already-fetched `candles` window (no new fetch -- see
+        # structure_utils.detect_three_soldiers_crows_sequence()'s own
+        # docstring for the full audit and locked-rule detail).
+        three_soldiers_crows = detect_three_soldiers_crows_sequence(candles)
+        snapshot.three_soldiers_crows_confirmed = three_soldiers_crows["confirmed"]
+        snapshot.three_soldiers_crows_direction = three_soldiers_crows["direction"]
+        snapshot.three_soldiers_crows_c1_index = three_soldiers_crows["c1_index"]
+        snapshot.three_soldiers_crows_c1_timestamp = three_soldiers_crows["c1_timestamp"]
+        snapshot.three_soldiers_crows_c1_open = three_soldiers_crows["c1_open"]
+        snapshot.three_soldiers_crows_c1_high = three_soldiers_crows["c1_high"]
+        snapshot.three_soldiers_crows_c1_low = three_soldiers_crows["c1_low"]
+        snapshot.three_soldiers_crows_c1_close = three_soldiers_crows["c1_close"]
+        snapshot.three_soldiers_crows_c2_index = three_soldiers_crows["c2_index"]
+        snapshot.three_soldiers_crows_c2_timestamp = three_soldiers_crows["c2_timestamp"]
+        snapshot.three_soldiers_crows_c2_open = three_soldiers_crows["c2_open"]
+        snapshot.three_soldiers_crows_c2_high = three_soldiers_crows["c2_high"]
+        snapshot.three_soldiers_crows_c2_low = three_soldiers_crows["c2_low"]
+        snapshot.three_soldiers_crows_c2_close = three_soldiers_crows["c2_close"]
+        snapshot.three_soldiers_crows_c3_index = three_soldiers_crows["c3_index"]
+        snapshot.three_soldiers_crows_c3_timestamp = three_soldiers_crows["c3_timestamp"]
+        snapshot.three_soldiers_crows_c3_open = three_soldiers_crows["c3_open"]
+        snapshot.three_soldiers_crows_c3_high = three_soldiers_crows["c3_high"]
+        snapshot.three_soldiers_crows_c3_low = three_soldiers_crows["c3_low"]
+        snapshot.three_soldiers_crows_c3_close = three_soldiers_crows["c3_close"]
 
         strength_diag = strength_engine.compute_strength(candles)
         snapshot.strength = strength_diag.strength
